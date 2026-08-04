@@ -11,18 +11,18 @@ const feedbackDemo = useFeedbackDemoModel()
 const { t } = useI18n()
 const notificationLabel = computed(() => {
   const unreadCount = feedbackDemo.unreadNotificationCount.value
-  if (unreadCount === 0) return t({ en: 'Messages', zh: '站内信' })
+  if (unreadCount === 0) return t({ en: 'Notifications', zh: '通知' })
   return t({
-    en: `Messages, ${unreadCount} unread ${unreadCount === 1 ? 'message' : 'messages'}`,
-    zh: `站内信，${unreadCount} 条未读`
+    en: `Notifications, ${unreadCount} unread`,
+    zh: `通知，${unreadCount} 条未读`
   })
 })
 const notificationRadar = computed(() => ({
-  name: 'Messages',
+  name: 'Notifications',
   desc:
     feedbackDemo.unreadNotificationCount.value === 0
-      ? 'Open messages'
-      : `Open messages. ${feedbackDemo.unreadNotificationCount.value} unread.`
+      ? 'Open notifications'
+      : `Open notifications. ${feedbackDemo.unreadNotificationCount.value} unread.`
 }))
 </script>
 

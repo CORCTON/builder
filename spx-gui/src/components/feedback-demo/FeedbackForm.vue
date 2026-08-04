@@ -24,13 +24,6 @@ const form = useForm({
 const attachments = ref<FeedbackAttachment[]>(props.draft.attachments.map((attachment) => ({ ...attachment })))
 const canSubmit = computed(() => form.value.title.trim() !== '' && form.value.description.trim() !== '')
 
-const sourceTips: Record<FeedbackSource, { en: string; zh: string }> = {
-  globalForm: {
-    en: 'XBuilder Support will receive your title, description, and attachments.',
-    zh: 'XBuilder 支持团队将收到标题、描述和附件。'
-  }
-}
-
 function handleFiles(event: Event) {
   const files = (event.target as HTMLInputElement).files
   if (files == null) return
@@ -77,8 +70,6 @@ function formatFileSize(size: number) {
 
 <template>
   <div>
-    <p class="mb-5 text-sm text-grey-800">{{ $t(sourceTips[source]) }}</p>
-
     <UIForm :form="form" @submit="submit">
       <UIFormItem :label="$t({ en: 'Title', zh: '标题' })" path="title">
         <UITextInput
@@ -106,7 +97,7 @@ function formatFileSize(size: number) {
           class="flex cursor-pointer items-center justify-center gap-2 rounded-lg border border-dashed border-grey-500 bg-grey-200 px-4 py-3 text-sm text-grey-900 transition-colors hover:border-primary-main hover:bg-primary-100"
         >
           <UIIcon type="localFile" />
-          {{ $t({ en: 'Choose files', zh: '选择文件' }) }}
+          {{ $t({ en: 'Add attachments', zh: '添加附件' }) }}
           <input
             v-radar="{ name: 'Feedback attachments', desc: 'Choose optional files to attach to the feedback' }"
             class="sr-only"
@@ -126,6 +117,7 @@ function formatFileSize(size: number) {
             {{ attachment.name }} · {{ formatFileSize(attachment.size) }}
             <button
               v-radar="{ name: 'Remove attachment', desc: `Remove ${attachment.name} from the feedback` }"
+              :aria-label="$t({ en: `Remove attachment: ${attachment.name}`, zh: `移除附件：${attachment.name}` })"
               type="button"
               class="inline-flex size-5 flex-none cursor-pointer items-center justify-center rounded-full border-0 bg-transparent p-0 text-grey-800 transition-colors hover:bg-grey-400 hover:text-red-main focus-visible:outline-2 focus-visible:outline-primary-main"
               @click="removeAttachment(attachment.id)"

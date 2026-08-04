@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import dayjs from 'dayjs'
 import { computed, ref, watch } from 'vue'
 
 import { useI18n } from '@/utils/i18n'
@@ -11,7 +10,8 @@ import type { InProductNotification } from './mock-data'
 
 const model = useFeedbackDemoModel()
 const copilot = useCopilot()
-const { t } = useI18n()
+const i18n = useI18n()
+const { t } = i18n
 const message = useMessage()
 const selectedNotificationID = ref<string | null>(null)
 const notificationTransition = ref<'notification-forward' | 'notification-back'>('notification-forward')
@@ -49,7 +49,12 @@ function backToNotificationList() {
 }
 
 function formatTime(value: string) {
-  return dayjs(value).format('MM-DD HH:mm')
+  return new Intl.DateTimeFormat(i18n.lang.value === 'zh' ? 'zh-CN' : 'en-US', {
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit'
+  }).format(new Date(value))
 }
 
 function formatFileSize(size: number) {
@@ -85,17 +90,17 @@ function formatAttachmentCount(count: number) {
     :visible="model.notificationCenterOpen.value"
     size="small"
     class="w-[520px]"
-    :radar="{ name: 'In-product messages', desc: 'Messages from the XBuilder support team' }"
+    :radar="{ name: 'Notifications', desc: 'Notifications from the XBuilder support team' }"
     @update:visible="model.notificationCenterOpen.value = $event"
   >
     <div class="overflow-hidden">
       <Transition :name="notificationTransition" mode="out-in">
         <div v-if="selectedNotification == null" key="notification-list">
           <div class="flex items-center justify-between border-b border-grey-400 px-5 py-4">
-            <h2 class="font-semibold text-title">{{ $t({ en: 'Messages', zh: '站内信' }) }}</h2>
+            <h2 class="font-semibold text-title">{{ $t({ en: 'Notifications', zh: '通知' }) }}</h2>
             <UIButton
-              v-radar="{ name: 'Close messages', desc: 'Close in-product messages' }"
-              :aria-label="$t({ en: 'Close messages', zh: '关闭站内信' })"
+              v-radar="{ name: 'Close notifications', desc: 'Close notifications' }"
+              :aria-label="$t({ en: 'Close notifications', zh: '关闭通知' })"
               type="white"
               shape="square"
               size="small"
@@ -105,7 +110,7 @@ function formatAttachmentCount(count: number) {
           </div>
 
           <div v-if="model.data.notifications.length === 0" class="px-5 py-12 text-center text-sm text-grey-700">
-            {{ $t({ en: 'No messages', zh: '暂无站内信' }) }}
+            {{ $t({ en: 'No notifications', zh: '暂无通知' }) }}
           </div>
           <div v-else class="max-h-[480px] overflow-y-auto">
             <button
@@ -153,8 +158,8 @@ function formatAttachmentCount(count: number) {
           <div class="flex items-center justify-between border-b border-grey-400 px-4 py-4">
             <div class="flex min-w-0 items-center gap-2">
               <UIButton
-                v-radar="{ name: 'Back to messages', desc: 'Return to the in-product message list' }"
-                :aria-label="$t({ en: 'Back to messages', zh: '返回站内信' })"
+                v-radar="{ name: 'Back to notifications', desc: 'Return to the notification list' }"
+                :aria-label="$t({ en: 'Back to notifications', zh: '返回通知' })"
                 type="white"
                 shape="square"
                 size="small"
@@ -169,8 +174,8 @@ function formatAttachmentCount(count: number) {
               </h2>
             </div>
             <UIButton
-              v-radar="{ name: 'Close message detail', desc: 'Close in-product messages' }"
-              :aria-label="$t({ en: 'Close messages', zh: '关闭站内信' })"
+              v-radar="{ name: 'Close notification detail', desc: 'Close notifications' }"
+              :aria-label="$t({ en: 'Close notifications', zh: '关闭通知' })"
               type="white"
               shape="square"
               size="small"

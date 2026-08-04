@@ -1,9 +1,8 @@
 <script setup lang="ts">
-import dayjs from 'dayjs'
 import { computed, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 
-import type { LocaleMessage } from '@/utils/i18n'
+import { useI18n, type LocaleMessage } from '@/utils/i18n'
 import { usePageTitle } from '@/utils/utils'
 import { UIButton, UIIcon, UITextInput } from '@/components/ui'
 import { useFeedbackDemoModel } from '@/components/feedback-demo/model'
@@ -17,6 +16,7 @@ import type {
 usePageTitle({ en: 'Feedback', zh: '用户反馈' })
 
 const router = useRouter()
+const i18n = useI18n()
 const feedbackDemo = useFeedbackDemoModel()
 const selectedFeedbackID = ref<string | null>(null)
 const reply = ref('')
@@ -28,8 +28,8 @@ const sourceLabels: Record<FeedbackSource, LocaleMessage> = {
 }
 
 const statusLabels = {
-  new: { en: 'New', zh: '新反馈' },
-  handled: { en: 'Handled', zh: '已处理' },
+  new: { en: 'Pending', zh: '待处理' },
+  handled: { en: 'No reply needed', zh: '无需回复' },
   replied: { en: 'Replied', zh: '已回复' }
 } satisfies Record<FeedbackSubmission['status'], LocaleMessage>
 
@@ -43,7 +43,7 @@ const selectedFeedback = computed(
   () => feedbackDemo.data.feedbacks.find((feedback) => feedback.id === selectedFeedbackID.value) ?? null
 )
 
-const newCount = computed(() => feedbackDemo.data.feedbacks.filter((feedback) => feedback.status === 'new').length)
+const pendingCount = computed(() => feedbackDemo.data.feedbacks.filter((feedback) => feedback.status === 'new').length)
 
 watch(selectedFeedbackID, () => {
   reply.value = ''
@@ -103,11 +103,22 @@ function resetMockData() {
 }
 
 function formatTime(value: string) {
-  return dayjs(value).format('YYYY-MM-DD HH:mm')
+  return new Intl.DateTimeFormat(i18n.lang.value === 'zh' ? 'zh-CN' : 'en-US', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit'
+  }).format(new Date(value))
 }
 
 function formatListTime(value: string) {
-  return dayjs(value).format('MM-DD HH:mm')
+  return new Intl.DateTimeFormat(i18n.lang.value === 'zh' ? 'zh-CN' : 'en-US', {
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit'
+  }).format(new Date(value))
 }
 
 function formatFileSize(size: number) {
@@ -123,23 +134,23 @@ function formatFileSize(size: number) {
         <p class="m-0 mt-1 text-sm text-grey-800">
           {{
             $t({
-              en: 'Review feedback and reply when needed.',
-              zh: '查看反馈，并在需要时回复用户。'
+              en: 'Review and process user feedback.',
+              zh: '查看并处理用户反馈。'
             })
           }}
         </p>
       </div>
       <div class="flex items-center gap-2">
         <span class="rounded-full bg-primary-100 px-3 py-1 text-xs text-primary-main">
-          {{ $t({ en: `${newCount} new`, zh: `${newCount} 条新反馈` }) }}
+          {{ $t({ en: `${pendingCount} pending`, zh: `${pendingCount} 条待处理` }) }}
         </span>
         <UIButton
-          v-radar="{ name: 'Reset feedback mock data', desc: 'Restore the editable feedback demo fixtures' }"
+          v-radar="{ name: 'Reset feedback demo data', desc: 'Restore the editable feedback demo fixtures' }"
           type="white"
           icon="reload"
           @click="resetMockData"
         >
-          {{ $t({ en: 'Reset mock data', zh: '重置 Mock 数据' }) }}
+          {{ $t({ en: 'Reset demo data', zh: '重置演示数据' }) }}
         </UIButton>
       </div>
     </div>
@@ -282,6 +293,12 @@ function formatFileSize(size: number) {
                 {{ attachment.name }} · {{ formatFileSize(attachment.size) }}
                 <button
                   v-radar="{ name: 'Remove reply attachment', desc: `Remove ${attachment.name} from the reply` }"
+                  :aria-label="
+                    $t({
+                      en: `Remove reply attachment: ${attachment.name}`,
+                      zh: `移除回复附件：${attachment.name}`
+                    })
+                  "
                   type="button"
                   class="inline-flex size-5 flex-none cursor-pointer items-center justify-center rounded-full border-0 bg-transparent p-0 text-grey-800 transition-colors hover:bg-grey-400 hover:text-red-main focus-visible:outline-2 focus-visible:outline-primary-main"
                   @click="removeReplyAttachment(attachment.id)"
@@ -293,14 +310,14 @@ function formatFileSize(size: number) {
           </div>
           <div class="mt-3 flex flex-col gap-3 tablet:flex-row tablet:items-end tablet:justify-between">
             <UIButton type="white" @click="handleMarkHandled">
-              {{ $t({ en: 'Handle without reply', zh: '无需回复，标记已处理' }) }}
+              {{ $t({ en: 'Mark as no reply needed', zh: '标记为无需回复' }) }}
             </UIButton>
             <div class="flex flex-col items-start gap-2 tablet:items-end">
               <p class="text-xs text-grey-700">
-                {{ $t({ en: 'The user will receive this as a new message.', zh: '用户会收到一条新站内信。' }) }}
+                {{ $t({ en: 'The user will receive a notification.', zh: '用户会收到通知。' }) }}
               </p>
               <UIButton
-                v-radar="{ name: 'Send support reply', desc: 'Send this reply as an in-product message' }"
+                v-radar="{ name: 'Send support reply', desc: 'Send this reply as a notification' }"
                 :disabled="reply.trim() === ''"
                 @click="handleReply"
               >
@@ -314,36 +331,43 @@ function formatFileSize(size: number) {
           v-else-if="selectedFeedback.status === 'replied'"
           class="rounded-lg border border-green-300 bg-green-100 p-4"
         >
-          <div class="flex items-start gap-3">
-            <UIIcon type="success" class="mt-0.5 shrink-0 text-green-600" />
-            <div>
-              <h4 class="text-sm font-semibold text-title">{{ $t({ en: 'Reply sent', zh: '回复已发送' }) }}</h4>
-              <p class="mt-1 text-sm leading-6 text-grey-1000">{{ selectedFeedback.reply }}</p>
-              <div v-if="selectedFeedback.replyAttachments.length > 0" class="mt-3 flex flex-wrap gap-2">
-                <template v-for="attachment in selectedFeedback.replyAttachments" :key="attachment.id">
-                  <a
-                    v-if="attachment.url != null"
-                    class="inline-flex items-center gap-2 rounded-md bg-white/70 px-2.5 py-1.5 text-xs text-grey-900 no-underline transition-colors hover:bg-white hover:text-primary-main focus-visible:outline-2 focus-visible:outline-primary-main"
-                    :href="attachment.url"
-                    target="_blank"
-                    rel="noreferrer"
-                  >
-                    <UIIcon type="file" class="size-3.5" />
-                    {{ attachment.name }} · {{ formatFileSize(attachment.size) }}
-                  </a>
-                  <span
-                    v-else
-                    class="inline-flex items-center gap-2 rounded-md bg-white/70 px-2.5 py-1.5 text-xs text-grey-900"
-                  >
-                    <UIIcon type="file" class="size-3.5" />
-                    {{ attachment.name }} · {{ formatFileSize(attachment.size) }}
-                  </span>
-                </template>
+          <div class="flex flex-col gap-3 tablet:flex-row tablet:items-start tablet:justify-between">
+            <div class="flex items-start gap-3">
+              <UIIcon type="success" class="mt-0.5 shrink-0 text-green-600" />
+              <div>
+                <h4 class="text-sm font-semibold text-title">
+                  {{ $t({ en: 'Reply sent', zh: '回复已发送' }) }}
+                </h4>
+                <p class="mt-1 text-sm leading-6 text-grey-1000">{{ selectedFeedback.reply }}</p>
+                <div v-if="selectedFeedback.replyAttachments.length > 0" class="mt-3 flex flex-wrap gap-2">
+                  <template v-for="attachment in selectedFeedback.replyAttachments" :key="attachment.id">
+                    <a
+                      v-if="attachment.url != null"
+                      class="inline-flex items-center gap-2 rounded-md bg-white/70 px-2.5 py-1.5 text-xs text-grey-900 no-underline transition-colors hover:bg-white hover:text-primary-main focus-visible:outline-2 focus-visible:outline-primary-main"
+                      :href="attachment.url"
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      <UIIcon type="file" class="size-3.5" />
+                      {{ attachment.name }} · {{ formatFileSize(attachment.size) }}
+                    </a>
+                    <span
+                      v-else
+                      class="inline-flex items-center gap-2 rounded-md bg-white/70 px-2.5 py-1.5 text-xs text-grey-900"
+                    >
+                      <UIIcon type="file" class="size-3.5" />
+                      {{ attachment.name }} · {{ formatFileSize(attachment.size) }}
+                    </span>
+                  </template>
+                </div>
+                <time v-if="selectedFeedback.repliedAt != null" class="mt-2 block text-xs text-grey-700">
+                  {{ formatTime(selectedFeedback.repliedAt) }}
+                </time>
               </div>
-              <time v-if="selectedFeedback.repliedAt != null" class="mt-2 block text-xs text-grey-700">
-                {{ formatTime(selectedFeedback.repliedAt) }}
-              </time>
             </div>
+            <UIButton v-if="replySent" type="white" size="small" @click="showUserNotification">
+              {{ $t({ en: 'View user notification', zh: '查看用户端通知' }) }}
+            </UIButton>
           </div>
         </div>
 
@@ -352,28 +376,16 @@ function formatFileSize(size: number) {
             <UIIcon type="success" class="mt-0.5 shrink-0 text-green-600" />
             <div>
               <h4 class="text-sm font-semibold text-title">
-                {{ $t({ en: 'Handled without reply', zh: '无需回复，已处理' }) }}
+                {{ $t({ en: 'Marked as no reply needed', zh: '已标记为无需回复' }) }}
               </h4>
               <p class="mt-1 text-sm text-grey-900">
-                {{ $t({ en: 'No message was sent to the user.', zh: '未向用户发送站内信。' }) }}
+                {{ $t({ en: 'No notification was sent to the user.', zh: '未向用户发送通知。' }) }}
               </p>
               <time v-if="selectedFeedback.handledAt != null" class="mt-2 block text-xs text-grey-700">
                 {{ formatTime(selectedFeedback.handledAt) }}
               </time>
             </div>
           </div>
-        </div>
-
-        <div
-          v-if="replySent"
-          class="mt-4 flex items-center justify-between gap-3 rounded-lg bg-primary-100 px-4 py-3 text-sm text-primary-main"
-        >
-          <span>{{
-            $t({ en: 'An unread message is ready for the user.', zh: '用户现在有一条新的未读站内信。' })
-          }}</span>
-          <UIButton type="white" size="small" @click="showUserNotification">
-            {{ $t({ en: 'View as user', zh: '切换到用户查看' }) }}
-          </UIButton>
         </div>
       </div>
 

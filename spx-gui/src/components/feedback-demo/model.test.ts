@@ -23,6 +23,51 @@ describe('feedback demo model', () => {
     expect(model.data.feedbacks[0].id).toBe(feedback.id)
   })
 
+  it('stores an isolated context snapshot with the submission', () => {
+    const model = createFeedbackDemoModel()
+    const context = {
+      version: 1 as const,
+      capturedAt: '2026-08-04T10:00:00.000Z',
+      page: { path: '/editor/demo' },
+      project: { identifier: 'user/demo', type: 'game' },
+      code: { file: 'main.spx', cursor: { line: 4, column: 2 } },
+      diagnostics: [{ file: 'main.spx', severity: 'error' as const, line: 4, message: 'Unknown name' }]
+    }
+
+    const feedback = model.submitFeedback({
+      source: 'globalForm',
+      title: 'Context test',
+      description: 'Context should travel with the feedback.',
+      attachments: [],
+      context
+    })
+
+    expect(feedback.context).toEqual(context)
+    context.page.path = '/changed-after-submit'
+    expect(feedback.context?.page.path).toBe('/editor/demo')
+  })
+
+  it('does not store context when the user opts out', () => {
+    const model = createFeedbackDemoModel()
+    const context = {
+      version: 1 as const,
+      capturedAt: '2026-08-04T10:00:00.000Z',
+      page: { path: '/editor/demo' }
+    }
+
+    const feedback = model.submitFeedback({
+      source: 'globalForm',
+      title: 'No context test',
+      description: 'Context should stay out of this submission.',
+      attachments: [],
+      includeContext: false,
+      context
+    })
+
+    expect(feedback.context).toBeUndefined()
+    expect(feedback.includeContext).toBe(false)
+  })
+
   it('delivers an admin reply as one unread in-product notification', () => {
     const model = createFeedbackDemoModel()
     const newFeedback = model.data.feedbacks.find((feedback) => feedback.status === 'new')!

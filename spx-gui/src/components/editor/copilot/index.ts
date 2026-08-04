@@ -8,10 +8,12 @@ import { skillSpxProject, skillXgoLanguage } from '@/components/copilot/skills/b
 import { cloudHelpers, type CloudHelpers } from '@/models/common/cloud'
 import { SpxProject } from '@/models/spx/project'
 import type { Sprite } from '@/models/spx/sprite'
+import type { FeedbackContext } from '@/components/feedback-demo/mock-data'
 import { Disposable } from '@/utils/disposable'
 import { useEditorCtx, type EditorCtx } from '../EditorContextProvider.vue'
 import {
   CodeEditor,
+  DiagnosticSeverity,
   getCodeFilePath,
   isSelectionEmpty,
   textDocumentId2CodeFileName,
@@ -268,6 +270,89 @@ class RuntimeContextProvider implements ICopilotContextProvider {
 Recent game runtime outputs (last ${recentOutputs.length} of ${outputs.length}):
 ${outputsStr}`
   }
+}
+
+const feedbackContextTextMaxLength = 500
+const feedbackContextDiagnosticsMax = 20
+const feedbackContextRuntimeErrorsMax = 20
+
+function sanitizeFeedbackText(value: string) {
+  return value
+    .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, feedbackContextTextMaxLength)
+}
+
+/** Capture the allowlisted editor state that can accompany a feedback submission. */
+export async function captureFeedbackContext(
+  editorCtx: EditorCtx | null,
+  codeEditor: CodeEditor | null,
+  pagePath: string
+): Promise<FeedbackContext> {
+  const context: FeedbackContext = {
+    version: 1,
+    capturedAt: new Date().toISOString(),
+    page: { path: pagePath }
+  }
+
+  const project = editorCtx?.project
+  if (project?.owner != null && project.name != null) {
+    context.project = {
+      identifier: `${project.owner}/${project.name}`,
+      type: String(project.type)
+    }
+  }
+
+  const editorUI = codeEditor?.getAttachedUI()
+  const activeTextDocument = editorUI?.activeTextDocument
+  if (editorUI != null && activeTextDocument != null) {
+    const selection = editorUI.selection
+    context.code = {
+      file: getCodeFilePath(activeTextDocument.id.uri),
+      ...(editorUI.cursorPosition == null ? {} : { cursor: { ...editorUI.cursorPosition } }),
+      ...(selection == null || isSelectionEmpty(selection)
+        ? {}
+        : { selection: { start: { ...selection.start }, end: { ...selection.position } } })
+    }
+  }
+
+  const runtimeErrors =
+    editorCtx?.state.runtime.outputs
+      .filter((output) => output.kind === 'error')
+      .slice(-feedbackContextRuntimeErrorsMax)
+      .map((output) => ({
+        time: new Date(output.time).toISOString(),
+        ...(output.source == null
+          ? {}
+          : {
+              file: textDocumentId2CodeFileName(output.source.textDocument).en,
+              line: output.source.range.start.line
+            }),
+        message: sanitizeFeedbackText(output.message)
+      })) ?? []
+  if (runtimeErrors.length > 0) context.runtimeErrors = runtimeErrors
+
+  if (codeEditor != null) {
+    try {
+      const diagnostics = await codeEditor.diagnosticWorkspace()
+      const feedbackDiagnostics = diagnostics.items
+        .flatMap((item) =>
+          item.diagnostics.map((diagnostic) => ({
+            file: textDocumentId2CodeFileName(item.textDocument).en,
+            severity: diagnostic.severity === DiagnosticSeverity.Warning ? ('warning' as const) : ('error' as const),
+            line: diagnostic.range.start.line,
+            message: sanitizeFeedbackText(diagnostic.message)
+          }))
+        )
+        .slice(0, feedbackContextDiagnosticsMax)
+      if (feedbackDiagnostics.length > 0) context.diagnostics = feedbackDiagnostics
+    } catch {
+      // Feedback collection must still work when the editor's language server is unavailable.
+    }
+  }
+
+  return context
 }
 
 /** Set up Copilot for SPX Editor, including registering tools and context providers. */

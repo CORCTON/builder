@@ -124,6 +124,10 @@ function formatListTime(value: string) {
 function formatFileSize(size: number) {
   return size < 1024 * 1024 ? `${Math.max(1, Math.round(size / 1024))} KB` : `${(size / 1024 / 1024).toFixed(1)} MB`
 }
+
+function formatPosition(position: { line: number; column: number }) {
+  return `${position.line}:${position.column}`
+}
 </script>
 
 <template>
@@ -209,7 +213,7 @@ function formatFileSize(size: number) {
               </span>
             </div>
             <h3 class="text-xl font-semibold text-title">{{ selectedFeedback.title }}</h3>
-            <p class="mt-1 text-xs text-grey-700">
+            <p class="mt-1 text-xs text-grey-800">
               {{ selectedFeedback.userDisplayName }} · {{ formatTime(selectedFeedback.createdAt) }}
             </p>
           </div>
@@ -246,14 +250,76 @@ function formatFileSize(size: number) {
 
           <dl class="mt-6 grid gap-3 border-t border-grey-300 pt-5 text-xs tablet:grid-cols-2">
             <div>
-              <dt class="text-grey-700">{{ $t({ en: 'Submitted from', zh: '提交入口' }) }}</dt>
+              <dt class="text-grey-800">{{ $t({ en: 'Submitted from', zh: '提交入口' }) }}</dt>
               <dd class="mt-1 text-grey-1000">{{ $t(sourceLabels[selectedFeedback.source]) }}</dd>
             </div>
             <div>
-              <dt class="text-grey-700">{{ $t({ en: 'Feedback ID', zh: '反馈 ID' }) }}</dt>
+              <dt class="text-grey-800">{{ $t({ en: 'Feedback ID', zh: '反馈 ID' }) }}</dt>
               <dd class="mt-1 select-all font-mono text-grey-1000">{{ selectedFeedback.id }}</dd>
             </div>
           </dl>
+
+          <section v-if="selectedFeedback.context != null" class="mt-6 border-t border-grey-300 pt-5">
+            <div class="flex items-baseline justify-between gap-3">
+              <h4 class="text-sm font-semibold text-title">{{ $t({ en: 'Shared context', zh: '已分享的上下文' }) }}</h4>
+              <time class="text-xs text-grey-800">{{ formatTime(selectedFeedback.context.capturedAt) }}</time>
+            </div>
+            <dl class="mt-3 grid gap-3 text-xs tablet:grid-cols-2">
+              <div>
+                <dt class="text-grey-800">{{ $t({ en: 'Page', zh: '页面' }) }}</dt>
+                <dd class="mt-1 break-all font-mono text-grey-1000">{{ selectedFeedback.context.page.path }}</dd>
+              </div>
+              <div v-if="selectedFeedback.context.project != null">
+                <dt class="text-grey-800">{{ $t({ en: 'Project', zh: '项目' }) }}</dt>
+                <dd class="mt-1 text-grey-1000">
+                  {{ selectedFeedback.context.project.identifier }} · {{ selectedFeedback.context.project.type }}
+                </dd>
+              </div>
+              <div v-if="selectedFeedback.context.code != null" class="tablet:col-span-2">
+                <dt class="text-grey-800">{{ $t({ en: 'Editor location', zh: '编辑器位置' }) }}</dt>
+                <dd class="mt-1 break-all font-mono text-grey-1000">
+                  {{ selectedFeedback.context.code.file }}
+                  <template v-if="selectedFeedback.context.code.cursor != null">
+                    · {{ formatPosition(selectedFeedback.context.code.cursor) }}
+                  </template>
+                  <template v-if="selectedFeedback.context.code.selection != null">
+                    · {{ formatPosition(selectedFeedback.context.code.selection.start) }}–{{
+                      formatPosition(selectedFeedback.context.code.selection.end)
+                    }}
+                  </template>
+                </dd>
+              </div>
+            </dl>
+
+            <div v-if="selectedFeedback.context.diagnostics?.length" class="mt-4">
+              <h5 class="text-xs font-semibold text-title">{{ $t({ en: 'Code diagnostics', zh: '代码诊断' }) }}</h5>
+              <ul class="mt-2 space-y-1 text-xs text-grey-900">
+                <li
+                  v-for="(diagnostic, index) in selectedFeedback.context.diagnostics"
+                  :key="`${diagnostic.file}-${diagnostic.line}-${index}`"
+                >
+                  <span class="font-mono">{{ diagnostic.file }}:{{ diagnostic.line }}</span>
+                  <span class="mx-1 text-grey-600">·</span>
+                  {{ diagnostic.message }}
+                </li>
+              </ul>
+            </div>
+
+            <div v-if="selectedFeedback.context.runtimeErrors?.length" class="mt-4">
+              <h5 class="text-xs font-semibold text-title">
+                {{ $t({ en: 'Recent runtime errors', zh: '最近的运行时错误' }) }}
+              </h5>
+              <ul class="mt-2 space-y-1 text-xs text-grey-900">
+                <li v-for="(error, index) in selectedFeedback.context.runtimeErrors" :key="`${error.time}-${index}`">
+                  <span v-if="error.file != null" class="font-mono">
+                    {{ error.file }}<template v-if="error.line != null">:{{ error.line }}</template>
+                  </span>
+                  <span v-if="error.file != null" class="mx-1 text-grey-600">·</span>
+                  {{ error.message }}
+                </li>
+              </ul>
+            </div>
+          </section>
         </div>
 
         <div v-if="selectedFeedback.status === 'new'" class="rounded-lg border border-grey-400 bg-grey-100 p-4">
@@ -270,7 +336,7 @@ function formatFileSize(size: number) {
           </label>
           <div class="mt-3">
             <label
-              class="inline-flex cursor-pointer items-center gap-2 rounded-md border border-dashed border-grey-500 bg-white px-3 py-2 text-xs text-grey-900 transition-colors hover:border-primary-main hover:bg-primary-100"
+              class="inline-flex cursor-pointer items-center gap-2 rounded-md border border-dashed border-grey-500 bg-white px-3 py-2 text-xs text-grey-900 transition-colors hover:border-primary-main hover:bg-primary-100 focus-within:border-primary-main focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-primary-main"
             >
               <UIIcon type="localFile" class="size-3.5" />
               {{ $t({ en: 'Attach files', zh: '添加附件' }) }}
@@ -300,7 +366,7 @@ function formatFileSize(size: number) {
                     })
                   "
                   type="button"
-                  class="inline-flex size-5 flex-none cursor-pointer items-center justify-center rounded-full border-0 bg-transparent p-0 text-grey-800 transition-colors hover:bg-grey-400 hover:text-red-main focus-visible:outline-2 focus-visible:outline-primary-main"
+                  class="inline-flex size-6 flex-none cursor-pointer items-center justify-center rounded-full border-0 bg-transparent p-0 text-grey-800 transition-colors hover:bg-grey-400 active:bg-grey-500 hover:text-red-main focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-primary-main"
                   @click="removeReplyAttachment(attachment.id)"
                 >
                   <UIIcon type="close" class="size-3" />
@@ -313,7 +379,7 @@ function formatFileSize(size: number) {
               {{ $t({ en: 'Mark as no reply needed', zh: '标记为无需回复' }) }}
             </UIButton>
             <div class="flex flex-col items-start gap-2 tablet:items-end">
-              <p class="text-xs text-grey-700">
+              <p class="text-xs text-grey-800">
                 {{ $t({ en: 'The user will receive a notification.', zh: '用户会收到通知。' }) }}
               </p>
               <UIButton
@@ -360,7 +426,7 @@ function formatFileSize(size: number) {
                     </span>
                   </template>
                 </div>
-                <time v-if="selectedFeedback.repliedAt != null" class="mt-2 block text-xs text-grey-700">
+                <time v-if="selectedFeedback.repliedAt != null" class="mt-2 block text-xs text-grey-800">
                   {{ formatTime(selectedFeedback.repliedAt) }}
                 </time>
               </div>
@@ -381,7 +447,7 @@ function formatFileSize(size: number) {
               <p class="mt-1 text-sm text-grey-900">
                 {{ $t({ en: 'No notification was sent to the user.', zh: '未向用户发送通知。' }) }}
               </p>
-              <time v-if="selectedFeedback.handledAt != null" class="mt-2 block text-xs text-grey-700">
+              <time v-if="selectedFeedback.handledAt != null" class="mt-2 block text-xs text-grey-800">
                 {{ formatTime(selectedFeedback.handledAt) }}
               </time>
             </div>

@@ -2,8 +2,10 @@ import { computed, inject, provide, reactive, ref, watch, type InjectionKey } fr
 
 import {
   createMockFeedbackDemoData,
+  cloneFeedbackContext,
   feedbackDemoMockVersion,
   type FeedbackAttachment,
+  type FeedbackContext,
   type FeedbackDemoData,
   type FeedbackSource
 } from './mock-data'
@@ -13,6 +15,8 @@ export interface SubmitFeedbackInput {
   title: string
   description: string
   attachments: FeedbackAttachment[]
+  includeContext?: boolean
+  context?: FeedbackContext
 }
 
 export function createFeedbackDemoModel(initialData = createMockFeedbackDemoData()) {
@@ -56,7 +60,10 @@ export function createFeedbackDemoModel(initialData = createMockFeedbackDemoData
       handledAt: null,
       reply: null,
       replyAttachments: [],
-      repliedAt: null
+      repliedAt: null,
+      context:
+        input.includeContext === false || input.context == null ? undefined : cloneFeedbackContext(input.context),
+      includeContext: input.includeContext !== false
     }
     data.feedbacks.unshift(feedback)
     activeFormSource.value = null

@@ -1,9 +1,13 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, ref, useId, watch } from 'vue'
+import { useRoute } from 'vue-router'
 
 import { useI18n } from '@/utils/i18n'
 import { UIButton, UIFormModal, UIIcon, UIModal, useMessage } from '@/components/ui'
 import { useCopilot } from '@/components/copilot/context'
+import { captureFeedbackContext } from '@/components/editor/copilot'
+import { useEditorCtxRef } from '@/components/editor/EditorContextProvider.vue'
+import { useCodeEditorRef } from '@/components/xgo-code-editor'
 import FeedbackForm from './FeedbackForm.vue'
 import { useFeedbackDemoModel, type SubmitFeedbackInput } from './model'
 import type { InProductNotification } from './mock-data'
@@ -13,28 +17,60 @@ const copilot = useCopilot()
 const i18n = useI18n()
 const { t } = i18n
 const message = useMessage()
+const route = useRoute()
+const editorCtxRef = useEditorCtxRef()
+const codeEditorRef = useCodeEditorRef()
+const isSubmitting = ref(false)
+const activeSubmission = ref<symbol | null>(null)
 const selectedNotificationID = ref<string | null>(null)
 const notificationTransition = ref<'notification-forward' | 'notification-back'>('notification-forward')
+const notificationTitleID = useId()
 const selectedNotification = computed(
   () => model.data.notifications.find((notification) => notification.id === selectedNotificationID.value) ?? null
 )
 
-watch(model.activeFormSource, (source) => {
+watch(model.activeFormSource, (source, previousSource) => {
   if (source != null) copilot.close()
+  if (source == null && previousSource != null) activeSubmission.value = null
 })
 
 watch(model.notificationCenterOpen, (open) => {
   if (!open) selectedNotificationID.value = null
 })
 
-function handleSubmit(input: SubmitFeedbackInput) {
-  model.submitFeedback(input)
-  message.success(
-    t({
-      en: 'Feedback sent.',
-      zh: '反馈已提交。'
-    })
-  )
+async function handleSubmit(input: SubmitFeedbackInput) {
+  if (isSubmitting.value) return
+
+  const submission = Symbol('feedback-submission')
+  activeSubmission.value = submission
+  isSubmitting.value = true
+  try {
+    const context =
+      input.includeContext === false
+        ? undefined
+        : await captureFeedbackContext(editorCtxRef.value ?? null, codeEditorRef.value, route.path)
+    if (activeSubmission.value !== submission || model.activeFormSource.value !== input.source) return
+
+    model.submitFeedback({ ...input, context })
+    message.success(
+      t({
+        en: 'Feedback sent.',
+        zh: '反馈已提交。'
+      })
+    )
+  } catch {
+    message.error(
+      t({
+        en: 'Feedback could not be sent. Try again.',
+        zh: '反馈提交失败，请重试。'
+      })
+    )
+  } finally {
+    if (activeSubmission.value === submission) {
+      activeSubmission.value = null
+      isSubmitting.value = false
+    }
+  }
 }
 
 function openNotification(notification: InProductNotification) {
@@ -74,6 +110,7 @@ function formatAttachmentCount(count: number) {
     v-if="model.activeFormSource.value != null"
     :key="model.activeFormSource.value"
     :radar="{ name: 'Feedback form', desc: 'Send feedback to the XBuilder team' }"
+    :mask-closable="!isSubmitting"
     :title="$t({ en: 'Send feedback', zh: '提交反馈' })"
     :visible="true"
     @update:visible="model.closeFeedbackForm"
@@ -81,6 +118,7 @@ function formatAttachmentCount(count: number) {
     <FeedbackForm
       :source="model.activeFormSource.value"
       :draft="model.data.drafts[model.activeFormSource.value]"
+      :submitting="isSubmitting"
       @cancel="model.closeFeedbackForm"
       @submit="handleSubmit"
     />
@@ -90,6 +128,7 @@ function formatAttachmentCount(count: number) {
     :visible="model.notificationCenterOpen.value"
     size="small"
     class="w-[520px]"
+    :aria-labelledby="notificationTitleID"
     :radar="{ name: 'Notifications', desc: 'Notifications from the XBuilder support team' }"
     @update:visible="model.notificationCenterOpen.value = $event"
   >
@@ -97,7 +136,9 @@ function formatAttachmentCount(count: number) {
       <Transition :name="notificationTransition" mode="out-in">
         <div v-if="selectedNotification == null" key="notification-list">
           <div class="flex items-center justify-between border-b border-grey-400 px-5 py-4">
-            <h2 class="font-semibold text-title">{{ $t({ en: 'Notifications', zh: '通知' }) }}</h2>
+            <h2 :id="notificationTitleID" class="font-semibold text-title">
+              {{ $t({ en: 'Notifications', zh: '通知' }) }}
+            </h2>
             <UIButton
               v-radar="{ name: 'Close notifications', desc: 'Close notifications' }"
               :aria-label="$t({ en: 'Close notifications', zh: '关闭通知' })"
@@ -109,7 +150,7 @@ function formatAttachmentCount(count: number) {
             />
           </div>
 
-          <div v-if="model.data.notifications.length === 0" class="px-5 py-12 text-center text-sm text-grey-700">
+          <div v-if="model.data.notifications.length === 0" class="px-5 py-12 text-center text-sm text-grey-800">
             {{ $t({ en: 'No notifications', zh: '暂无通知' }) }}
           </div>
           <div v-else class="max-h-[480px] overflow-y-auto">
@@ -120,8 +161,12 @@ function formatAttachmentCount(count: number) {
                 name: 'Support notification',
                 desc: notification.readAt == null ? 'Unread reply from XBuilder Support' : 'Reply from XBuilder Support'
               }"
-              class="block w-full appearance-none cursor-pointer border-x-0 border-t-0 border-b border-grey-300 px-5 py-4 text-left shadow-none last:border-b-0 hover:bg-grey-200"
-              :class="notification.readAt == null ? 'bg-primary-100/60' : 'bg-transparent'"
+              class="block w-full appearance-none cursor-pointer border-x-0 border-t-0 border-b border-grey-300 px-5 py-4 text-left shadow-none transition-colors last:border-b-0 focus-visible:relative focus-visible:z-1 focus-visible:outline-2 focus-visible:outline-primary-main"
+              :class="
+                notification.readAt == null
+                  ? 'bg-primary-100/60 hover:bg-primary-200 active:bg-primary-300'
+                  : 'bg-transparent hover:bg-grey-200 active:bg-grey-300'
+              "
               @click="openNotification(notification)"
             >
               <div class="flex items-start gap-3">
@@ -137,12 +182,12 @@ function formatAttachmentCount(count: number) {
                     >
                       {{ notification.title }}
                     </span>
-                    <time class="shrink-0 text-xs text-grey-700">{{ formatTime(notification.createdAt) }}</time>
+                    <time class="shrink-0 text-xs text-grey-800">{{ formatTime(notification.createdAt) }}</time>
                   </div>
                   <p class="mt-1 truncate text-sm text-grey-900">{{ notification.body }}</p>
                   <div
                     v-if="notification.attachments.length > 0"
-                    class="mt-2 flex items-center gap-1 text-xs text-grey-700"
+                    class="mt-2 flex items-center gap-1 text-xs text-grey-800"
                   >
                     <UIIcon type="file" class="size-3" />
                     {{ formatAttachmentCount(notification.attachments.length) }}
@@ -169,7 +214,11 @@ function formatAttachmentCount(count: number) {
                   <UIIcon type="arrowRightSmall" class="size-3.5 rotate-180" />
                 </template>
               </UIButton>
-              <h2 class="truncate font-semibold text-title" :title="selectedNotification.title">
+              <h2
+                :id="notificationTitleID"
+                class="truncate font-semibold text-title"
+                :title="selectedNotification.title"
+              >
                 {{ selectedNotification.title }}
               </h2>
             </div>
@@ -209,7 +258,7 @@ function formatAttachmentCount(count: number) {
                       {{ attachment.name }}
                     </a>
                     <p v-else class="truncate text-sm font-medium text-title">{{ attachment.name }}</p>
-                    <p class="mt-0.5 text-xs text-grey-700">{{ formatFileSize(attachment.size) }}</p>
+                    <p class="mt-0.5 text-xs text-grey-800">{{ formatFileSize(attachment.size) }}</p>
                   </div>
                 </div>
               </div>

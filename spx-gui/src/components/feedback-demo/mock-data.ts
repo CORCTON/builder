@@ -1,6 +1,6 @@
 export type FeedbackSource = 'globalForm'
 export type FeedbackStatus = 'new' | 'handled' | 'replied'
-export const feedbackDemoMockVersion = 8
+export const feedbackDemoMockVersion = 9
 
 export interface FeedbackAttachment {
   id: string
@@ -13,6 +13,48 @@ export interface FeedbackDraft {
   title: string
   description: string
   attachments: FeedbackAttachment[]
+  includeContext?: boolean
+}
+
+export interface FeedbackContext {
+  version: 1
+  capturedAt: string
+  page: {
+    path: string
+  }
+  project?: {
+    identifier: string
+    type: string
+  }
+  code?: {
+    file: string
+    cursor?: {
+      line: number
+      column: number
+    }
+    selection?: {
+      start: {
+        line: number
+        column: number
+      }
+      end: {
+        line: number
+        column: number
+      }
+    }
+  }
+  diagnostics?: Array<{
+    file: string
+    severity: 'error' | 'warning'
+    line: number
+    message: string
+  }>
+  runtimeErrors?: Array<{
+    time: string
+    file?: string
+    line?: number
+    message: string
+  }>
 }
 
 export interface FeedbackSubmission extends FeedbackDraft {
@@ -26,6 +68,7 @@ export interface FeedbackSubmission extends FeedbackDraft {
   reply: string | null
   replyAttachments: FeedbackAttachment[]
   repliedAt: string | null
+  context?: FeedbackContext
 }
 
 export interface InProductNotification {
@@ -58,7 +101,8 @@ const mockData: FeedbackDemoData = {
     globalForm: {
       title: '',
       description: '',
-      attachments: []
+      attachments: [],
+      includeContext: true
     }
   },
   feedbacks: [
@@ -111,6 +155,10 @@ function cloneAttachments(attachments: FeedbackAttachment[]) {
   return attachments.map((attachment) => ({ ...attachment }))
 }
 
+export function cloneFeedbackContext(context: FeedbackContext): FeedbackContext {
+  return JSON.parse(JSON.stringify(context)) as FeedbackContext
+}
+
 export function createMockFeedbackDemoData(): FeedbackDemoData {
   return {
     ...mockData,
@@ -124,7 +172,8 @@ export function createMockFeedbackDemoData(): FeedbackDemoData {
     feedbacks: mockData.feedbacks.map((feedback) => ({
       ...feedback,
       attachments: cloneAttachments(feedback.attachments),
-      replyAttachments: cloneAttachments(feedback.replyAttachments)
+      replyAttachments: cloneAttachments(feedback.replyAttachments),
+      context: feedback.context == null ? undefined : cloneFeedbackContext(feedback.context)
     })),
     notifications: mockData.notifications.map((notification) => ({
       ...notification,

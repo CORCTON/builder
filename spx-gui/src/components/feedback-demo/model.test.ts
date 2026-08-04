@@ -23,6 +23,23 @@ describe('feedback demo model', () => {
     expect(model.data.feedbacks[0].id).toBe(feedback.id)
   })
 
+  it('opens a prefilled form without submitting feedback', () => {
+    const model = createFeedbackDemoModel()
+    const initialFeedbackCount = model.data.feedbacks.length
+
+    model.openFeedbackForm('globalForm', {
+      title: 'Project does not start',
+      description: 'Running the project stays on the loading screen.'
+    })
+
+    expect(model.activeFormSource.value).toBe('globalForm')
+    expect(model.data.drafts.globalForm).toMatchObject({
+      title: 'Project does not start',
+      description: 'Running the project stays on the loading screen.'
+    })
+    expect(model.data.feedbacks).toHaveLength(initialFeedbackCount)
+  })
+
   it('stores an isolated context snapshot with the submission', () => {
     const model = createFeedbackDemoModel()
     const context = {

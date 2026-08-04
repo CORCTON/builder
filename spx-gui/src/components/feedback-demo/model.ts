@@ -6,6 +6,7 @@ import {
   feedbackDemoMockVersion,
   type FeedbackAttachment,
   type FeedbackContext,
+  type FeedbackDraft,
   type FeedbackDemoData,
   type FeedbackSource
 } from './mock-data'
@@ -19,6 +20,8 @@ export interface SubmitFeedbackInput {
   context?: FeedbackContext
 }
 
+type FeedbackFormPrefill = Pick<FeedbackDraft, 'title' | 'description'>
+
 export function createFeedbackDemoModel(initialData = createMockFeedbackDemoData()) {
   const data = reactive<FeedbackDemoData>(initialData)
   const activeFormSource = ref<FeedbackSource | null>(null)
@@ -27,7 +30,11 @@ export function createFeedbackDemoModel(initialData = createMockFeedbackDemoData
     () => data.notifications.filter((notification) => notification.readAt == null).length
   )
 
-  function openFeedbackForm(source: FeedbackSource) {
+  function openFeedbackForm(source: FeedbackSource, prefill?: FeedbackFormPrefill) {
+    if (prefill != null) {
+      data.drafts[source].title = prefill.title
+      data.drafts[source].description = prefill.description
+    }
     activeFormSource.value = source
     notificationCenterOpen.value = false
   }

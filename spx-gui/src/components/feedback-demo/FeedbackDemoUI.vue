@@ -1,13 +1,15 @@
 <script setup lang="ts">
-import { computed, ref, useId, watch } from 'vue'
+import { computed, onScopeDispose, ref, useId, watch } from 'vue'
 import { useRoute } from 'vue-router'
 
 import { useI18n } from '@/utils/i18n'
 import { UIButton, UIFormModal, UIIcon, UIModal, useMessage } from '@/components/ui'
 import { useCopilot } from '@/components/copilot/context'
+import { RoundState } from '@/components/copilot/copilot'
 import { captureFeedbackContext } from '@/components/editor/copilot'
 import { useEditorCtxRef } from '@/components/editor/EditorContextProvider.vue'
 import { useCodeEditorRef } from '@/components/xgo-code-editor'
+import { createPrepareFeedbackTool, type PreparedFeedbackDraft } from './copilot'
 import FeedbackForm from './FeedbackForm.vue'
 import { useFeedbackDemoModel, type SubmitFeedbackInput } from './model'
 import type { InProductNotification } from './mock-data'
@@ -22,11 +24,33 @@ const editorCtxRef = useEditorCtxRef()
 const codeEditorRef = useCodeEditorRef()
 const isSubmitting = ref(false)
 const activeSubmission = ref<symbol | null>(null)
+const pendingCopilotFeedback = ref<PreparedFeedbackDraft | null>(null)
 const selectedNotificationID = ref<string | null>(null)
 const notificationTransition = ref<'notification-forward' | 'notification-back'>('notification-forward')
 const notificationTitleID = useId()
 const selectedNotification = computed(
   () => model.data.notifications.find((notification) => notification.id === selectedNotificationID.value) ?? null
+)
+
+onScopeDispose(
+  copilot.registerTool(
+    createPrepareFeedbackTool((draft) => {
+      pendingCopilotFeedback.value = draft
+    })
+  )
+)
+
+watch(
+  () => copilot.currentSession?.currentRound?.state ?? null,
+  (state) => {
+    if (state === RoundState.Completed && pendingCopilotFeedback.value != null) {
+      const draft = pendingCopilotFeedback.value
+      pendingCopilotFeedback.value = null
+      model.openFeedbackForm('globalForm', draft)
+      return
+    }
+    if (state === RoundState.Cancelled || state === RoundState.Failed) pendingCopilotFeedback.value = null
+  }
 )
 
 watch(model.activeFormSource, (source, previousSource) => {

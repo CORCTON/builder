@@ -1,6 +1,10 @@
+import type { FeedbackContext } from './context'
+
 export type FeedbackSource = 'globalForm'
 export type FeedbackStatus = 'new' | 'handled' | 'replied'
-export const feedbackDemoMockVersion = 9
+export type { FeedbackContext } from './context'
+
+export const feedbackDemoMockVersion = 10
 
 export interface FeedbackAttachment {
   id: string
@@ -14,47 +18,6 @@ export interface FeedbackDraft {
   description: string
   attachments: FeedbackAttachment[]
   includeContext?: boolean
-}
-
-export interface FeedbackContext {
-  version: 1
-  capturedAt: string
-  page: {
-    path: string
-  }
-  project?: {
-    identifier: string
-    type: string
-  }
-  code?: {
-    file: string
-    cursor?: {
-      line: number
-      column: number
-    }
-    selection?: {
-      start: {
-        line: number
-        column: number
-      }
-      end: {
-        line: number
-        column: number
-      }
-    }
-  }
-  diagnostics?: Array<{
-    file: string
-    severity: 'error' | 'warning'
-    line: number
-    message: string
-  }>
-  runtimeErrors?: Array<{
-    time: string
-    file?: string
-    line?: number
-    message: string
-  }>
 }
 
 export interface FeedbackSubmission extends FeedbackDraft {
@@ -119,7 +82,75 @@ const mockData: FeedbackDemoData = {
       handledAt: null,
       reply: null,
       replyAttachments: [],
-      repliedAt: null
+      repliedAt: null,
+      context: {
+        version: 2,
+        capturedAt: '2026-08-03T09:24:42+08:00',
+        page: {
+          fullPath: '/editor/xiaoyu/space-adventure?mode=debug',
+          language: 'zh'
+        },
+        project: {
+          identifier: 'xiaoyu/space-adventure',
+          type: 'game',
+          displayName: '太空冒险',
+          content: {
+            sprites: ['Hero', 'Meteor'],
+            sounds: ['Jump', 'Explosion'],
+            backdrops: ['Space'],
+            widgets: ['Score'],
+            physicsEnabled: true
+          }
+        },
+        selectedSprite: {
+          name: 'Hero',
+          costumes: ['Idle', 'Jump'],
+          animations: ['Run'],
+          heading: 90,
+          x: -120,
+          y: 24,
+          size: 80,
+          rotationStyle: 'normal',
+          visible: true,
+          codeLinesNum: 42
+        },
+        code: {
+          file: 'Hero.spx',
+          cursor: { line: 8, column: 5 },
+          sample: {
+            lineCount: 42,
+            sampledLines: {
+              6: 'onStart => {',
+              7: '    for {',
+              8: '        step 4',
+              9: '    }',
+              10: '}'
+            }
+          }
+        },
+        diagnostics: [
+          {
+            file: 'Hero',
+            severity: 'error',
+            line: 8,
+            message: 'Unknown command: step'
+          }
+        ],
+        runtimeOutputs: [
+          {
+            time: '2026-08-03T09:24:38+08:00',
+            kind: 'log',
+            message: 'Game started'
+          },
+          {
+            time: '2026-08-03T09:24:41+08:00',
+            kind: 'error',
+            file: 'Hero',
+            line: 8,
+            message: 'ReferenceError: step is not defined'
+          }
+        ]
+      }
     },
     {
       id: 'feedback-1001',

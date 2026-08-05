@@ -43,11 +43,26 @@ describe('feedback demo model', () => {
   it('stores an isolated context snapshot with the submission', () => {
     const model = createFeedbackDemoModel()
     const context = {
-      version: 1 as const,
+      version: 2 as const,
       capturedAt: '2026-08-04T10:00:00.000Z',
-      page: { path: '/editor/demo' },
-      project: { identifier: 'user/demo', type: 'game' },
-      code: { file: 'main.spx', cursor: { line: 4, column: 2 } },
+      page: { fullPath: '/editor/demo?mode=debug', language: 'zh' as const },
+      project: {
+        identifier: 'user/demo',
+        type: 'game',
+        displayName: 'Demo',
+        content: {
+          sprites: ['Hero'],
+          sounds: [],
+          backdrops: ['Room'],
+          widgets: [],
+          physicsEnabled: true
+        }
+      },
+      code: {
+        file: 'main.spx',
+        cursor: { line: 4, column: 2 },
+        sample: { lineCount: 12, sampledLines: { 4: 'onStart => {' } }
+      },
       diagnostics: [{ file: 'main.spx', severity: 'error' as const, line: 4, message: 'Unknown name' }]
     }
 
@@ -60,16 +75,16 @@ describe('feedback demo model', () => {
     })
 
     expect(feedback.context).toEqual(context)
-    context.page.path = '/changed-after-submit'
-    expect(feedback.context?.page.path).toBe('/editor/demo')
+    context.page.fullPath = '/changed-after-submit'
+    expect(feedback.context?.page.fullPath).toBe('/editor/demo?mode=debug')
   })
 
   it('does not store context when the user opts out', () => {
     const model = createFeedbackDemoModel()
     const context = {
-      version: 1 as const,
+      version: 2 as const,
       capturedAt: '2026-08-04T10:00:00.000Z',
-      page: { path: '/editor/demo' }
+      page: { fullPath: '/editor/demo', language: 'en' as const }
     }
 
     const feedback = model.submitFeedback({

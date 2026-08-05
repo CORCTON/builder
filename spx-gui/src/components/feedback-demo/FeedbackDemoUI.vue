@@ -6,10 +6,10 @@ import { useI18n } from '@/utils/i18n'
 import { UIButton, UIFormModal, UIIcon, UIModal, useMessage } from '@/components/ui'
 import { useCopilot } from '@/components/copilot/context'
 import { RoundState } from '@/components/copilot/copilot'
-import { captureFeedbackContext } from '@/components/editor/copilot'
 import { useEditorCtxRef } from '@/components/editor/EditorContextProvider.vue'
 import { useCodeEditorRef } from '@/components/xgo-code-editor'
 import { createPrepareFeedbackTool, type PreparedFeedbackDraft } from './copilot'
+import { captureFeedbackContext } from './context'
 import FeedbackForm from './FeedbackForm.vue'
 import { useFeedbackDemoModel, type SubmitFeedbackInput } from './model'
 import type { InProductNotification } from './mock-data'
@@ -72,7 +72,7 @@ async function handleSubmit(input: SubmitFeedbackInput) {
     const context =
       input.includeContext === false
         ? undefined
-        : await captureFeedbackContext(editorCtxRef.value ?? null, codeEditorRef.value, route.path)
+        : await captureFeedbackContext(editorCtxRef.value ?? null, codeEditorRef.value, route.fullPath, i18n.lang.value)
     if (activeSubmission.value !== submission || model.activeFormSource.value !== input.source) return
 
     model.submitFeedback({ ...input, context })

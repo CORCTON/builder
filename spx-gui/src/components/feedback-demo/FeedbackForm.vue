@@ -141,8 +141,8 @@ function formatFileSize(size: number) {
             <p :id="contextDescriptionID" class="mt-1 text-xs leading-5 text-grey-800">
               {{
                 $t({
-                  en: 'Shares the page, project, editor location, and errors to help diagnose this report. No source code, sign-in details, or browser data.',
-                  zh: '分享页面、项目、编辑器位置和错误，帮助定位问题。不包含源代码、登录信息或浏览器数据。'
+                  en: 'Includes the current page and language, project structure, selected sprite, nearby code, diagnostics, and the latest 50 runtime outputs. Sign-in details and Copilot conversations are not included.',
+                  zh: '包含当前页面与语言、项目结构、所选角色、附近代码、代码诊断和最近 50 条运行输出。不包含登录信息或 Copilot 对话。'
                 })
               }}
             </p>

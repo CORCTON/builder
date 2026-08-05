@@ -128,6 +128,24 @@ function formatFileSize(size: number) {
 function formatPosition(position: { line: number; column: number }) {
   return `${position.line}:${position.column}`
 }
+
+function formatNames(names: string[]) {
+  return names.length === 0 ? i18n.t({ en: 'None', zh: '无' }) : names.join(', ')
+}
+
+function formatCodeSample(sampledLines: Record<string, string>) {
+  const entries = Object.entries(sampledLines)
+  const lineNumberWidth = entries.reduce((width, [line]) => Math.max(width, line.length), 1)
+  return entries.map(([line, content]) => `${line.padStart(lineNumberWidth)} | ${content}`).join('\n')
+}
+
+function formatRuntimeTime(value: string) {
+  return new Intl.DateTimeFormat(i18n.lang.value === 'zh' ? 'zh-CN' : 'en-US', {
+    hour: 'numeric',
+    minute: '2-digit',
+    second: '2-digit'
+  }).format(new Date(value))
+}
 </script>
 
 <template>
@@ -267,33 +285,159 @@ function formatPosition(position: { line: number; column: number }) {
             <dl class="mt-3 grid gap-3 text-xs tablet:grid-cols-2">
               <div>
                 <dt class="text-grey-800">{{ $t({ en: 'Page', zh: '页面' }) }}</dt>
-                <dd class="mt-1 break-all font-mono text-grey-1000">{{ selectedFeedback.context.page.path }}</dd>
+                <dd class="mt-1 break-all font-mono text-grey-1000">{{ selectedFeedback.context.page.fullPath }}</dd>
               </div>
-              <div v-if="selectedFeedback.context.project != null">
-                <dt class="text-grey-800">{{ $t({ en: 'Project', zh: '项目' }) }}</dt>
+              <div>
+                <dt class="text-grey-800">{{ $t({ en: 'Interface language', zh: '界面语言' }) }}</dt>
                 <dd class="mt-1 text-grey-1000">
-                  {{ selectedFeedback.context.project.identifier }} · {{ selectedFeedback.context.project.type }}
-                </dd>
-              </div>
-              <div v-if="selectedFeedback.context.code != null" class="tablet:col-span-2">
-                <dt class="text-grey-800">{{ $t({ en: 'Editor location', zh: '编辑器位置' }) }}</dt>
-                <dd class="mt-1 break-all font-mono text-grey-1000">
-                  {{ selectedFeedback.context.code.file }}
-                  <template v-if="selectedFeedback.context.code.cursor != null">
-                    · {{ formatPosition(selectedFeedback.context.code.cursor) }}
-                  </template>
-                  <template v-if="selectedFeedback.context.code.selection != null">
-                    · {{ formatPosition(selectedFeedback.context.code.selection.start) }}–{{
-                      formatPosition(selectedFeedback.context.code.selection.end)
-                    }}
-                  </template>
+                  {{ selectedFeedback.context.page.language === 'zh' ? '简体中文' : 'English' }}
                 </dd>
               </div>
             </dl>
 
-            <div v-if="selectedFeedback.context.diagnostics?.length" class="mt-4">
-              <h5 class="text-xs font-semibold text-title">{{ $t({ en: 'Code diagnostics', zh: '代码诊断' }) }}</h5>
-              <ul class="mt-2 space-y-1 text-xs text-grey-900">
+            <details v-if="selectedFeedback.context.project != null" class="mt-4 border-t border-grey-300">
+              <summary class="cursor-pointer py-3 text-xs font-semibold text-title">
+                {{ $t({ en: 'Project structure', zh: '项目结构' }) }}
+              </summary>
+              <dl class="grid gap-3 pb-4 text-xs tablet:grid-cols-2">
+                <div>
+                  <dt class="text-grey-800">{{ $t({ en: 'Project', zh: '项目' }) }}</dt>
+                  <dd class="mt-1 text-grey-1000">
+                    {{ selectedFeedback.context.project.displayName }}
+                    <template v-if="selectedFeedback.context.project.identifier != null">
+                      · {{ selectedFeedback.context.project.identifier }}
+                    </template>
+                    · {{ selectedFeedback.context.project.type }}
+                  </dd>
+                </div>
+                <div>
+                  <dt class="text-grey-800">{{ $t({ en: 'Physics', zh: '物理引擎' }) }}</dt>
+                  <dd class="mt-1 text-grey-1000">
+                    {{
+                      selectedFeedback.context.project.content.physicsEnabled
+                        ? $t({ en: 'Enabled', zh: '已启用' })
+                        : $t({ en: 'Disabled', zh: '未启用' })
+                    }}
+                  </dd>
+                </div>
+                <div>
+                  <dt class="text-grey-800">
+                    {{ $t({ en: 'Sprites', zh: '角色' }) }} ·
+                    {{ selectedFeedback.context.project.content.sprites.length }}
+                  </dt>
+                  <dd class="mt-1 break-words text-grey-1000">
+                    {{ formatNames(selectedFeedback.context.project.content.sprites) }}
+                  </dd>
+                </div>
+                <div>
+                  <dt class="text-grey-800">
+                    {{ $t({ en: 'Sounds', zh: '声音' }) }} ·
+                    {{ selectedFeedback.context.project.content.sounds.length }}
+                  </dt>
+                  <dd class="mt-1 break-words text-grey-1000">
+                    {{ formatNames(selectedFeedback.context.project.content.sounds) }}
+                  </dd>
+                </div>
+                <div>
+                  <dt class="text-grey-800">
+                    {{ $t({ en: 'Backdrops', zh: '背景' }) }} ·
+                    {{ selectedFeedback.context.project.content.backdrops.length }}
+                  </dt>
+                  <dd class="mt-1 break-words text-grey-1000">
+                    {{ formatNames(selectedFeedback.context.project.content.backdrops) }}
+                  </dd>
+                </div>
+                <div>
+                  <dt class="text-grey-800">
+                    {{ $t({ en: 'Widgets', zh: '控件' }) }} ·
+                    {{ selectedFeedback.context.project.content.widgets.length }}
+                  </dt>
+                  <dd class="mt-1 break-words text-grey-1000">
+                    {{ formatNames(selectedFeedback.context.project.content.widgets) }}
+                  </dd>
+                </div>
+              </dl>
+            </details>
+
+            <details v-if="selectedFeedback.context.selectedSprite != null" class="border-t border-grey-300">
+              <summary class="cursor-pointer py-3 text-xs font-semibold text-title">
+                {{ $t({ en: 'Selected sprite', zh: '所选角色' }) }} ·
+                {{ selectedFeedback.context.selectedSprite.name }}
+              </summary>
+              <dl class="grid gap-3 pb-4 text-xs tablet:grid-cols-2">
+                <div>
+                  <dt class="text-grey-800">
+                    {{ $t({ en: 'Costumes', zh: '造型' }) }} ·
+                    {{ selectedFeedback.context.selectedSprite.costumes.length }}
+                  </dt>
+                  <dd class="mt-1 break-words text-grey-1000">
+                    {{ formatNames(selectedFeedback.context.selectedSprite.costumes) }}
+                  </dd>
+                </div>
+                <div>
+                  <dt class="text-grey-800">
+                    {{ $t({ en: 'Animations', zh: '动画' }) }} ·
+                    {{ selectedFeedback.context.selectedSprite.animations.length }}
+                  </dt>
+                  <dd class="mt-1 break-words text-grey-1000">
+                    {{ formatNames(selectedFeedback.context.selectedSprite.animations) }}
+                  </dd>
+                </div>
+                <div>
+                  <dt class="text-grey-800">{{ $t({ en: 'Position and size', zh: '位置与大小' }) }}</dt>
+                  <dd class="mt-1 font-mono text-grey-1000">
+                    x {{ selectedFeedback.context.selectedSprite.x }}, y
+                    {{ selectedFeedback.context.selectedSprite.y }} ·
+                    {{ selectedFeedback.context.selectedSprite.size }}%
+                  </dd>
+                </div>
+                <div>
+                  <dt class="text-grey-800">{{ $t({ en: 'State', zh: '状态' }) }}</dt>
+                  <dd class="mt-1 text-grey-1000">
+                    {{ selectedFeedback.context.selectedSprite.rotationStyle }} ·
+                    {{ selectedFeedback.context.selectedSprite.heading }}° ·
+                    {{
+                      selectedFeedback.context.selectedSprite.visible
+                        ? $t({ en: 'Visible', zh: '可见' })
+                        : $t({ en: 'Hidden', zh: '隐藏' })
+                    }}
+                    · {{ selectedFeedback.context.selectedSprite.codeLinesNum }}
+                    {{ $t({ en: 'lines', zh: '行代码' }) }}
+                  </dd>
+                </div>
+              </dl>
+            </details>
+
+            <details v-if="selectedFeedback.context.code != null" class="border-t border-grey-300">
+              <summary class="cursor-pointer py-3 text-xs font-semibold text-title">
+                {{ $t({ en: 'Nearby source', zh: '附近代码' }) }} · {{ selectedFeedback.context.code.file }}
+              </summary>
+              <div class="pb-4 text-xs">
+                <p class="break-all text-grey-800">
+                  <template v-if="selectedFeedback.context.code.cursor != null">
+                    {{ $t({ en: 'Cursor', zh: '光标' }) }}
+                    {{ formatPosition(selectedFeedback.context.code.cursor) }}
+                  </template>
+                  <template v-if="selectedFeedback.context.code.selection != null">
+                    · {{ $t({ en: 'Selection', zh: '选区' }) }}
+                    {{ formatPosition(selectedFeedback.context.code.selection.start) }}–{{
+                      formatPosition(selectedFeedback.context.code.selection.end)
+                    }}
+                  </template>
+                  · {{ selectedFeedback.context.code.sample.lineCount }} {{ $t({ en: 'lines total', zh: '行总计' }) }}
+                </p>
+                <pre class="mt-2 overflow-x-auto rounded-md bg-grey-100 p-3 font-mono leading-5 text-grey-1000">{{
+                  formatCodeSample(selectedFeedback.context.code.sample.sampledLines)
+                }}</pre>
+              </div>
+            </details>
+
+            <details v-if="selectedFeedback.context.diagnostics?.length" class="border-t border-grey-300">
+              <summary class="cursor-pointer py-3 text-xs font-semibold text-title">
+                {{ $t({ en: 'Code diagnostics', zh: '代码诊断' }) }} ·
+                {{ selectedFeedback.context.diagnostics.length }}
+              </summary>
+              <ul class="space-y-2 pb-4 text-xs text-grey-900">
                 <li
                   v-for="(diagnostic, index) in selectedFeedback.context.diagnostics"
                   :key="`${diagnostic.file}-${diagnostic.line}-${index}`"
@@ -303,22 +447,31 @@ function formatPosition(position: { line: number; column: number }) {
                   {{ diagnostic.message }}
                 </li>
               </ul>
-            </div>
+            </details>
 
-            <div v-if="selectedFeedback.context.runtimeErrors?.length" class="mt-4">
-              <h5 class="text-xs font-semibold text-title">
-                {{ $t({ en: 'Recent runtime errors', zh: '最近的运行时错误' }) }}
-              </h5>
-              <ul class="mt-2 space-y-1 text-xs text-grey-900">
-                <li v-for="(error, index) in selectedFeedback.context.runtimeErrors" :key="`${error.time}-${index}`">
-                  <span v-if="error.file != null" class="font-mono">
-                    {{ error.file }}<template v-if="error.line != null">:{{ error.line }}</template>
+            <details v-if="selectedFeedback.context.runtimeOutputs?.length" class="border-t border-grey-300">
+              <summary class="cursor-pointer py-3 text-xs font-semibold text-title">
+                {{ $t({ en: 'Runtime output', zh: '运行输出' }) }} ·
+                {{ selectedFeedback.context.runtimeOutputs.length }}
+              </summary>
+              <ul class="space-y-2 pb-4 text-xs text-grey-900">
+                <li v-for="(output, index) in selectedFeedback.context.runtimeOutputs" :key="`${output.time}-${index}`">
+                  <time class="font-mono text-grey-700">{{ formatRuntimeTime(output.time) }}</time>
+                  <span class="mx-1 text-grey-600">·</span>
+                  <span :class="output.kind === 'error' ? 'font-medium text-red-main' : 'text-grey-800'">
+                    {{ output.kind === 'error' ? 'ERROR' : 'LOG' }}
                   </span>
-                  <span v-if="error.file != null" class="mx-1 text-grey-600">·</span>
-                  {{ error.message }}
+                  <template v-if="output.file != null">
+                    <span class="mx-1 text-grey-600">·</span>
+                    <span class="font-mono">
+                      {{ output.file }}<template v-if="output.line != null">:{{ output.line }}</template>
+                    </span>
+                  </template>
+                  <span class="mx-1 text-grey-600">·</span>
+                  {{ output.message }}
                 </li>
               </ul>
-            </div>
+            </details>
           </section>
         </div>
 

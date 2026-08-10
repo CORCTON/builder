@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onScopeDispose, ref, useId, watch } from 'vue'
+import { computed, nextTick, onScopeDispose, ref, useId, watch } from 'vue'
 import { useRoute } from 'vue-router'
 
 import { useI18n } from '@/utils/i18n'
@@ -12,7 +12,8 @@ import { createPrepareFeedbackTool, type PreparedFeedbackDraft } from './copilot
 import { captureFeedbackContext } from './context'
 import FeedbackForm from './FeedbackForm.vue'
 import { useFeedbackDemoModel, type SubmitFeedbackInput } from './model'
-import type { InProductNotification } from './mock-data'
+import type { FeedbackAttachment, InProductNotification } from './mock-data'
+import { captureViewport } from '@/components/screenshot/capture'
 
 const model = useFeedbackDemoModel()
 const copilot = useCopilot()
@@ -55,7 +56,10 @@ watch(
 
 watch(model.activeFormSource, (source, previousSource) => {
   if (source != null) copilot.close()
-  if (source == null && previousSource != null) activeSubmission.value = null
+  if (source == null && previousSource != null) {
+    activeSubmission.value = null
+    isSubmitting.value = false
+  }
 })
 
 watch(model.notificationCenterOpen, (open) => {
@@ -69,13 +73,37 @@ async function handleSubmit(input: SubmitFeedbackInput) {
   activeSubmission.value = submission
   isSubmitting.value = true
   try {
-    const context =
-      input.includeContext === false
-        ? undefined
-        : await captureFeedbackContext(editorCtxRef.value ?? null, codeEditorRef.value, route.fullPath, i18n.lang.value)
+    await nextTick()
+    await waitForNextPaint()
+
+    const includeContext = input.includeContext !== false
+    let screenshotUnavailable = false
+    const [context, screenshot] = await Promise.all([
+      includeContext
+        ? captureFeedbackContext(editorCtxRef.value ?? null, codeEditorRef.value, route.fullPath, i18n.lang.value)
+        : Promise.resolve(undefined),
+      includeContext
+        ? captureFeedbackScreenshot().catch(() => {
+            screenshotUnavailable = true
+            return null
+          })
+        : Promise.resolve(null)
+    ])
     if (activeSubmission.value !== submission || model.activeFormSource.value !== input.source) return
 
-    model.submitFeedback({ ...input, context })
+    model.submitFeedback({
+      ...input,
+      attachments: screenshot == null ? input.attachments : [...input.attachments, screenshot],
+      context
+    })
+    if (screenshotUnavailable) {
+      message.warning(
+        t({
+          en: 'The page screenshot could not be prepared. Feedback was still sent.',
+          zh: '页面截图暂时无法生成，反馈仍已提交。'
+        })
+      )
+    }
     message.success(
       t({
         en: 'Feedback sent.',
@@ -94,6 +122,26 @@ async function handleSubmit(input: SubmitFeedbackInput) {
       activeSubmission.value = null
       isSubmitting.value = false
     }
+  }
+}
+
+function waitForNextPaint() {
+  return new Promise<void>((resolve) => {
+    if (typeof requestAnimationFrame !== 'function') {
+      resolve()
+      return
+    }
+    requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
+  })
+}
+
+async function captureFeedbackScreenshot(): Promise<FeedbackAttachment> {
+  const { blob } = await captureViewport()
+  return {
+    id: `screenshot-${Date.now()}`,
+    name: 'feedback-screenshot.png',
+    size: blob.size,
+    url: URL.createObjectURL(blob)
   }
 }
 
@@ -131,15 +179,15 @@ function formatAttachmentCount(count: number) {
 
 <template>
   <UIFormModal
-    v-if="model.activeFormSource.value != null"
-    :key="model.activeFormSource.value"
+    :key="model.activeFormSource.value ?? 'closed'"
     :radar="{ name: 'Feedback form', desc: 'Send feedback to the XBuilder team' }"
     :mask-closable="!isSubmitting"
     :title="$t({ en: 'Send feedback', zh: '提交反馈' })"
-    :visible="true"
+    :visible="model.activeFormSource.value != null"
     @update:visible="model.closeFeedbackForm"
   >
     <FeedbackForm
+      v-if="model.activeFormSource.value != null"
       :source="model.activeFormSource.value"
       :draft="model.data.drafts[model.activeFormSource.value]"
       :submitting="isSubmitting"

@@ -2,8 +2,8 @@
 import { ref, useId } from 'vue'
 
 import { useI18n } from '@/utils/i18n'
-import { UIButton, UIForm, UIFormItem, UIIcon, UISwitch, UITextInput, useForm } from '@/components/ui'
-import type { FeedbackAttachment, FeedbackDraft, FeedbackSource } from './mock-data'
+import { UIButton, UIForm, UIFormItem, UISwitch, UITextInput, useForm } from '@/components/ui'
+import type { FeedbackDraft, FeedbackSource } from './mock-data'
 import type { SubmitFeedbackInput } from './model'
 
 const props = defineProps<{
@@ -24,28 +24,7 @@ const form = useForm({
   title: [props.draft.title, validateTitle],
   description: [props.draft.description, validateDescription]
 })
-const attachments = ref<FeedbackAttachment[]>(props.draft.attachments.map((attachment) => ({ ...attachment })))
 const includeContext = ref(props.draft.includeContext ?? true)
-
-function handleFiles(event: Event) {
-  const files = (event.target as HTMLInputElement).files
-  if (files == null) return
-  for (const attachment of attachments.value) {
-    if (attachment.url?.startsWith('blob:')) URL.revokeObjectURL(attachment.url)
-  }
-  attachments.value = Array.from(files).map((file, index) => ({
-    id: `local-attachment-${index}`,
-    name: file.name,
-    size: file.size,
-    url: URL.createObjectURL(file)
-  }))
-}
-
-function removeAttachment(id: string) {
-  const attachment = attachments.value.find((item) => item.id === id)
-  if (attachment?.url?.startsWith('blob:')) URL.revokeObjectURL(attachment.url)
-  attachments.value = attachments.value.filter((attachment) => attachment.id !== id)
-}
 
 function validateTitle(value: string) {
   if (value.trim() === '') return t({ en: 'Enter a short title', zh: '请填写一个简短的标题' })
@@ -62,13 +41,9 @@ function submit() {
     source: props.source,
     title: form.value.title,
     description: form.value.description,
-    attachments: attachments.value,
+    attachments: [],
     includeContext: includeContext.value
   })
-}
-
-function formatFileSize(size: number) {
-  return size < 1024 * 1024 ? `${Math.max(1, Math.round(size / 1024))} KB` : `${(size / 1024 / 1024).toFixed(1)} MB`
 }
 </script>
 
@@ -94,42 +69,6 @@ function formatFileSize(size: number) {
           :maxlength="2000"
           :placeholder="$t({ en: 'What happened? What did you expect?', zh: '发生了什么？你原本希望发生什么？' })"
         />
-      </UIFormItem>
-
-      <UIFormItem>
-        <label
-          class="inline-flex w-fit cursor-pointer items-center gap-2 rounded-md bg-grey-200 px-3 py-2 text-sm text-grey-900 transition-colors hover:bg-grey-300 active:bg-grey-400 focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-primary-main"
-        >
-          <UIIcon type="localFile" class="size-4" />
-          {{ $t({ en: 'Add attachments', zh: '添加附件' }) }}
-          <input
-            v-radar="{ name: 'Feedback attachments', desc: 'Choose optional files to attach to the feedback' }"
-            class="sr-only"
-            type="file"
-            multiple
-            accept="image/*,.txt,.log,.zip"
-            @change="handleFiles"
-          />
-        </label>
-        <div v-if="attachments.length > 0" class="mt-2 flex flex-wrap gap-2">
-          <span
-            v-for="attachment in attachments"
-            :key="attachment.id"
-            class="inline-flex items-center gap-2 rounded-md bg-grey-300 px-2.5 py-1.5 text-xs text-grey-900"
-          >
-            <UIIcon type="file" class="size-3.5" />
-            {{ attachment.name }} · {{ formatFileSize(attachment.size) }}
-            <button
-              v-radar="{ name: 'Remove attachment', desc: `Remove ${attachment.name} from the feedback` }"
-              :aria-label="$t({ en: `Remove attachment: ${attachment.name}`, zh: `移除附件：${attachment.name}` })"
-              type="button"
-              class="inline-flex size-6 flex-none cursor-pointer items-center justify-center rounded-full border-0 bg-transparent p-0 text-grey-800 transition-colors hover:bg-grey-400 active:bg-grey-500 hover:text-red-main focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-primary-main"
-              @click="removeAttachment(attachment.id)"
-            >
-              <UIIcon type="close" class="size-3" />
-            </button>
-          </span>
-        </div>
       </UIFormItem>
 
       <section class="mt-6 border-t border-grey-300 pt-4" :aria-labelledby="contextTitleID">

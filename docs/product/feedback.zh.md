@@ -91,6 +91,10 @@ In-product Notification 用于把管理员回复交给用户。
 * Submission ID 相同但内容不同，请求发生冲突。
 * 内容相同但 Submission ID 不同，不自动合并。
 
+### 查看 Project Snapshot
+
+管理员从 Feedback 详情选择“打开项目快照”，在编辑器中打开 Context 中的 Project Snapshot。
+
 ### Copilot 辅助
 
 当用户明确提出需要反馈，或接受 Copilot 的建议后，Copilot 可以生成 Title 和 Description 草稿并打开 Feedback 表单。
@@ -107,6 +111,7 @@ Copilot 额度耗尽时，提示中可以提供直接打开 Feedback 表单的�
 
 * 查看 Feedback 列表和详情
 * 查看用户同意分享的 Context
+* 在编辑器中打开 Context 中的 Project Snapshot
 * 回复 `new` 状态的 Feedback
 * 将 Feedback 标记为 `handled`
 
@@ -152,7 +157,7 @@ Copilot 根据用户明确的请求生成 Title 和 Description 草稿。用户�
 
 ### 管理员处理反馈
 
-拥有 `feedbackAdmin` 的管理员查看 Feedback 详情和用户分享的 Context，回复用户或将 Feedback 标记为无需回复。并发处理时，界面展示已经生效的处理结果。
+拥有 `feedbackAdmin` 的管理员查看 Feedback 详情和用户分享的 Context，并在需要时从 Feedback 详情进入编辑器打开 Project Snapshot。管理员可以回复用户或将 Feedback 标记为无需回复。并发处理时，界面展示已经生效的处理结果。
 
 ### 用户查看回复
 

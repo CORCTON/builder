@@ -91,6 +91,10 @@ The same submission uses a stable Submission ID:
 * The same Submission ID with different content causes a conflict.
 * The same content with a different Submission ID is not merged automatically.
 
+### Viewing a Project Snapshot
+
+From Feedback details, administrators select "Open project snapshot" to open the Project Snapshot from Context in the editor.
+
 ### Copilot Assistance
 
 After the user explicitly asks for Feedback, or accepts Copilot's suggestion, Copilot may generate a Title and Description draft and open the Feedback form.
@@ -107,6 +111,7 @@ The feedback administrator role is `feedbackAdmin`, with the derived `canManageF
 
 * View Feedback lists and details
 * View the Context shared by users
+* Open the Project Snapshot from Context in the editor
 * Reply to Feedback in the `new` state
 * Mark Feedback as `handled`
 
@@ -152,7 +157,7 @@ Copilot prepares a Title and Description draft after the user explicitly asks fo
 
 ### Administrator Processes Feedback
 
-An administrator with `feedbackAdmin` opens the Feedback details, views the shared Context, replies to the user, or marks the Feedback as requiring no reply. When concurrent processing occurs, the interface shows the result that has already taken effect.
+An administrator with `feedbackAdmin` opens the Feedback details, views the shared Context, and opens the Project Snapshot in the editor when needed. The administrator can reply to the user or mark the Feedback as requiring no reply. When concurrent processing occurs, the interface shows the result that has already taken effect.
 
 ### User Views a Reply
 

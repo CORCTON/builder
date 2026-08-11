@@ -1,6 +1,6 @@
 # Feedback
 
-Users may encounter broken features, unexpected runtime results, or situations where they do not know how to continue while using XBuilder. Feedback allows users to describe a problem directly in XBuilder and, with their consent, attach Context captured at submission time to help administrators investigate it.
+Users may encounter broken features, unexpected runtime results, or situations where they do not know how to continue while using XBuilder. Feedback allows users to describe a problem directly in XBuilder. With the user's consent, the Feedback includes Context to help administrators investigate it.
 
 ## Background
 
@@ -11,21 +11,23 @@ Feedback therefore stores the user's Title and Description, and the Context the 
 ## Goals
 
 * Users can submit Feedback from within XBuilder.
-* Feedback can include Context captured when it is submitted.
+* Feedback can include Context.
 * Copilot can help users prepare Feedback, but the user confirms and submits the final content.
 * Users can still access Feedback when Copilot is temporarily unavailable or its quota is exhausted.
-* Administrators can review, process, and reply to Feedback, and view the shared Context.
+* Administrators can review, process, and reply to Feedback.
 * Users can receive administrator replies within XBuilder.
 
 ## Basic Concepts
 
 ### Feedback
 
-A Feedback has three parts:
+A Feedback item has three parts:
 
 * Title
 * Description
 * Context
+
+Context may be empty.
 
 Title is limited to 100 characters. Description is limited to 2000 characters.
 
@@ -44,11 +46,11 @@ new -> replied
 new -> handled
 ```
 
-`replied` and `handled` are terminal states. A Feedback can have at most one Reply.
+`replied` and `handled` are terminal states. A Feedback item can have at most one Reply.
 
 ### Context
 
-Context is diagnostic information collected when the user confirms Feedback submission. It includes:
+Context is the information in a Feedback item used to investigate the reported problem. It includes:
 
 * The current page, language, and capture time
 * The current project's identifier, type, name, and resource structure
@@ -61,15 +63,13 @@ Context is diagnostic information collected when the user confirms Feedback subm
 
 Context is captured when the user confirms submission, rather than when the form is opened. It is not updated when the project or page changes after submission.
 
-Users can turn off "Share diagnostic information." When it is off, XBuilder does not capture Context. Some contextual details may be omitted when unavailable, but this must not prevent Feedback from being submitted.
+Users can turn off "Share diagnostic information." When it is off, Context is empty. Some contextual details may be omitted when unavailable, but this must not prevent Feedback from being submitted.
 
-Context is not a public resource. Only the submitting user and administrators with the `feedbackAdmin` role can access it.
+Context in a Feedback item is not a public resource. Only the submitting user and administrators with the `feedbackAdmin` role can access it.
 
 ### Reply
 
-A Reply is an administrator's written response to a Feedback.
-
-After a Reply is saved, the Feedback changes to `replied` and the submitting user receives an In-Product Notification.
+A Reply is an administrator's written response to a Feedback item.
 
 ### In-Product Notification
 
@@ -83,7 +83,7 @@ It contains the reply and reply time. Users can view the unread count, notificat
 
 Users open "Send feedback" from the profile menu in the top-right corner, enter a Title and Description, and decide whether to share Context.
 
-When the user agrees, the system captures Context when submission is confirmed. The form shows an in-progress state while submitting to prevent repeated actions. It closes and shows a completion state after the server confirms that the Feedback was created. When submission fails, the form keeps the user's input and allows a retry.
+When the user agrees, the Feedback includes the Context captured at confirmation. The form shows an in-progress state while submitting to prevent repeated actions. It closes and shows a completion state after the server confirms that the Feedback was created. When submission fails, the form keeps the user's input and allows a retry.
 
 The same submission uses a stable Submission ID:
 
@@ -93,7 +93,7 @@ The same submission uses a stable Submission ID:
 
 ### Viewing a Project Snapshot
 
-From Feedback details, administrators select "Open project snapshot" to open the Project Snapshot from Context in the editor.
+From Feedback details, administrators select "Open project snapshot" to open the Project Snapshot included in Feedback in the editor.
 
 ### Copilot Assistance
 
@@ -110,14 +110,12 @@ The feedback administrator role is `feedbackAdmin`, with the derived `canManageF
 `feedbackAdmin` can:
 
 * View Feedback lists and details
-* View the Context shared by users
-* Open the Project Snapshot from Context in the editor
+* View user-shared Context in Feedback details
+* Open the Project Snapshot included in Feedback in the editor
 * Reply to Feedback in the `new` state
 * Mark Feedback as `handled`
 
-`authorizationAdmin` can assign `feedbackAdmin`. Other administrator roles do not include Feedback management permissions.
-
-The frontend uses `canManageFeedback` to control the management entry point. Admin APIs must still check `feedbackAdmin` on the server.
+`authorizationAdmin` can assign `feedbackAdmin`. Feedback management operations require the `feedbackAdmin` role; other administrator roles do not include this permission.
 
 ### Processing Feedback
 
@@ -149,16 +147,16 @@ Marking Feedback as `handled` does not create a Notification.
 
 ### User Submits Feedback
 
-The user enters a Title and Description, decides whether to share Context, and submits Feedback. On success, the user sees a clear completion state. On failure, the user can retry with the original content.
+When users encounter broken behavior, unexpected runtime results, or do not know how to continue, they can submit Feedback from the profile menu. They decide whether to share Context; if submission fails, the form keeps their input for retry.
 
 ### User Asks Copilot to Prepare Feedback
 
-Copilot prepares a Title and Description draft after the user explicitly asks for it. The user reviews and edits the content, decides whether to share Context, and submits Feedback.
+The user asks for Feedback in a Copilot conversation. Copilot prepares a draft and opens the Feedback form, and the user reviews and edits it before submission.
 
 ### Administrator Processes Feedback
 
-An administrator with `feedbackAdmin` opens the Feedback details, views the shared Context, and opens the Project Snapshot in the editor when needed. The administrator can reply to the user or mark the Feedback as requiring no reply. When concurrent processing occurs, the interface shows the result that has already taken effect.
+An administrator with `feedbackAdmin` opens the Feedback details and uses Context to investigate the problem. When needed, the administrator opens the Project Snapshot in the editor; after processing, the administrator replies to the user or marks the Feedback as requiring no reply.
 
 ### User Views a Reply
 
-After an administrator replies, the user sees an unread notification in the navigation bar and can view the reply.
+After an administrator replies, the user sees an unread notification in the navigation bar and opens its details to view the reply.

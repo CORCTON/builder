@@ -1,26 +1,23 @@
 # 用户反馈 Feedback
 
-用户在使用 XBuilder 时可能遇到功能异常、运行结果不符合预期，或不知道如何继续操作。Feedback 允许用户在
-XBuilder 内描述问题。用户同意后，Feedback 可以包含帮助管理员排查问题的 Context。
+Feedback 允许用户描述在 XBuilder 中遇到的问题，并在用户同意后分享帮助管理员排查问题的 Context。
 
 ## 背景
 
-用户反馈通常只包含一段文字，管理员还需要询问用户所在页面、工程状态和错误信息，才能开始排查。
+简短的问题描述通常不足以复现问题。管理员还可能需要了解问题发生时的页面、工程状态、代码、诊断信息和运行输出。
 
-因此，Feedback 将用户填写的内容和用户同意分享的 Context 组合到同一条记录中，供管理员排查和处理。
+Feedback 将用户填写的内容与其同意分享的 Context 保存在同一条记录中，帮助管理员减少追问并开始处理问题。
 
 ## 目标
 
-* 用户可以在 XBuilder 内提交反馈。
-* Feedback 可以包含提交时采集的 Context。
-* Copilot 可以帮助用户整理反馈，但最终内容由用户确认和提交。
-* Copilot 暂时不可用或额度耗尽时，用户仍然可以使用反馈入口。
-* 管理员可以查看、处理并回复 Feedback。
+* 用户可以在 XBuilder 内提交 Feedback。
+* 用户可以在 Feedback 中包含提交时采集的 Context。
+* Copilot 可以准备 Feedback 草稿，交由用户检查和提交。
+* 支持的 AI 功能可以在出现功能或额度问题时提供 Feedback 入口。
+* 管理员可以排查、处理并回复 Feedback。
 * 用户可以在 XBuilder 内收到管理员回复。
 
 ## 基本概念与规则
-
-本节定义 Feedback 记录、Context 以及处理流程使用的状态。
 
 ### 反馈 Feedback
 
@@ -30,7 +27,7 @@ XBuilder 内描述问题。用户同意后，Feedback 可以包含帮助管理�
 * Description
 * Context
 
-Context 可以为空。
+Context 为可选内容。
 
 Feedback 记录还包含以下系统字段：
 
@@ -45,9 +42,9 @@ Feedback 有三种状态：
 
 | 状态 | 含义 |
 | - | - |
-| `new` | 尚未处理 |
-| `replied` | 管理员已经回复 |
-| `handled` | 管理员已处理，不需要回复 |
+| `new` | 等待管理员处理 |
+| `replied` | 管理员已完成回复 |
+| `handled` | 管理员通过“标记为已处理”完成处理 |
 
 状态按以下方向变化：
 
@@ -56,13 +53,13 @@ new -> replied
 new -> handled
 ```
 
-`replied` 与 `handled` 是终态。一条 Feedback 最多包含一条 Reply。
+`replied` 与 `handled` 是终态。Feedback 进入 `replied` 时保存一条管理员 Reply。
 
 ### 上下文 Context
 
-Context 是 Feedback 中用于定位问题的信息，包括：
+Context 是随 Feedback 分享的诊断信息，包括以下类别中的可用信息：
 
-* Source：触发 Feedback 的页面和入口
+* Source：打开 Feedback 的页面和入口
 * 当前页面、语言和采集时间
 * 当前工程的标识、类型、名称和资源结构
 * 当前选中的角色及其基本状态
@@ -70,129 +67,92 @@ Context 是 Feedback 中用于定位问题的信息，包括：
 * 当前工程中的代码错误和警告
 * 当前工程的运行输出
 * Project Snapshot
-* 页面截图
+* 当前页面截图
 
-Context 由内联诊断信息和较大内容的引用组成：
+对于 Copilot 同样使用的诊断信息，Feedback 沿用现有的 Copilot 上下文采集和采样规则。Context 在用户确认提交时
+采集，并在提交后保持固定。
 
-* 内联诊断信息沿用现有采集规则：包含最近 50 条运行输出，以及当前光标前后最多 21 行代码。
-* Feedback API 定义内联 Context 序列化后的最大尺寸，客户端和服务端使用同一限制进行校验。
-* Project Snapshot 是当前工程 `exportFiles()` 返回的 `files` 集合。提交时将其 JSON 内容保存到 Kodo，Context 只保存 Kodo 对象引用，不把整个集合嵌入 Feedback 记录。
-* 页面截图保存到 Kodo，Context 只保存 Kodo 对象引用，不把图片嵌入 Feedback 记录。截图遵循现有 Upload Session 返回的 `maxSize` 限制。
-* 内联诊断信息或较大内容无法采集，或超出 API/上传限制时，省略对应 Context 项并标记为不可用；剩余内容仍可提交。
+用户通过“分享诊断信息”控制 Context 分享。开启后，Feedback 包含当时可用的 Context。
 
-Context 在用户确认提交时采集，而不是在打开表单时采集。工程和页面在提交后继续发生变化，不会更新已经保存的 Context。
+### 项目快照 Project Snapshot
 
-用户可以关闭“分享诊断信息”。关闭后 Context 为空。部分上下文信息不可用时可以省略对应内容，但不能因此阻止 Feedback 提交。
+Project Snapshot 保存提交时的工程文件内容。它属于 Context，获得授权的管理员可以在编辑器中打开快照并排查
+Feedback。
 
 ### 回复 Reply
 
 Reply 是管理员针对 Feedback 给出的文字回复。
 
-### 站内通知 In-Product Notification
-
-In-Product Notification 用于把管理员的 Reply 交给用户。
-
-通知包含回复内容和回复时间。用户可以从导航栏查看未读数量、通知列表和通知详情。
-
 ## 权限管理
 
 反馈管理员对应的角色为 `feedbackAdmin`，并派生 `canManageFeedback` capability。
 
-用户侧的 Feedback 读取范围限定为当前用户提交的 Feedback。拥有 `feedbackAdmin` 角色的管理员可以读取全部
-Feedback 记录，包括用户分享的 Context。Context 中的快照和截图引用遵循同一归属校验，不提供公开下载资源。
-
-`feedbackAdmin` 可以：
+用户可以读取自己提交的 Feedback。`feedbackAdmin` 可以：
 
 * 查看 Feedback 列表和详情
-* 查看 Feedback 详情中用户同意分享的 Context
-* 在编辑器中打开 Feedback 中的 Project Snapshot
+* 查看随 Feedback 分享的 Context
+* 在编辑器中打开其中的 Project Snapshot
 * 回复 `new` 状态的 Feedback
-* 将 Feedback 标记为 `handled`
+* 将 `new` 状态的 Feedback 标记为 `handled`
 
-`authorizationAdmin` 可以为用户配置 `feedbackAdmin`。Feedback 管理操作必须由 `feedbackAdmin` 执行，其他管理员
-角色不包含该权限。
-
-前端通过 `canManageFeedback` 控制管理入口，Feedback 管理 API 仍必须在服务端检查 `feedbackAdmin`。
-
-Feedback 列表只返回轻量的记录字段和 Context 是否可用。详情页按需加载内联 Context；通过归属校验的用户或管理员
-打开、预览时，才获取 Project Snapshot 的 JSON 和截图内容。
+Context 沿用所属 Feedback 的访问权限。`authorizationAdmin` 可以配置 `feedbackAdmin` 角色。
 
 ## 核心机制
 
 ### 提交与采集
 
-用户从右上角头像菜单打开反馈表单，填写 Title 和 Description，并决定是否分享 Context。
+用户从头像菜单打开 Feedback 表单，填写 Title 和 Description，并决定是否分享 Context。用户确认提交后，系统采集
+Context。
 
-用户同意分享时，系统在确认提交时采集 Context。提交过程中显示进行中状态，避免用户重复操作。服务端确认
-Feedback 创建成功后，界面显示完成状态并关闭表单；提交失败时保留用户输入并允许重试。
-
-同一次提交使用稳定的 Submission ID。Submission ID 以提交用户为作用域，不同用户使用相同值时视为不同提交：
-
-* Submission ID 与内容均相同，返回已经创建的 Feedback。
-* Submission ID 相同但内容不同，请求发生冲突。
-* 内容相同但 Submission ID 不同，不自动合并。
+提交过程中，表单显示进行中状态。提交失败时，表单保留已填写的内容，并提供重试操作。
 
 ### Copilot 辅助
 
-当用户明确提出需要反馈，或接受 Copilot 的建议后，Copilot 可以生成 Title 和 Description 草稿并打开 Feedback
-表单。
+当用户提出需要提交 Feedback，或接受 Copilot 的建议后，Copilot 可以准备 Title 和 Description 草稿。用户确认打开
+Feedback 表单后，可以检查草稿、决定是否分享 Context，然后提交 Feedback。
 
-用户可以修改草稿并决定是否分享 Context。Copilot 不能直接提交 Feedback，也不能在用户未确认时打开表单。
+### AI 功能与额度问题反馈
 
-Copilot 生成的草稿不替代 Feedback 的 Context。用户确认提交时，Feedback 按上述规则采集 Context。
-
-Copilot 暂时不可用或额度耗尽时，提示中可以提供直接打开 Feedback 表单的操作。用户也始终可以从头像菜单进入
-Feedback。
+Copilot、Costume 生成和 Animation 生成分别展示对应的功能与额度问题提示。提示可以提供打开 Feedback 表单的操作，
+Source 记录对应的功能和入口。
 
 ### 查看 Project Snapshot
 
-管理员从 Feedback 详情选择“打开项目快照”。客户端从 Kodo 获取引用的 JSON，将其中的 `files` 集合交给编辑器的
-本地加载能力，在本地打开快照；此过程不会创建或保存新的 SPX Project。
+管理员可以从 Feedback 详情通过编辑器可复用的本地工程加载能力打开 Project Snapshot，查看 Feedback 提交时的工程
+内容。
 
 ### 处理 Feedback
 
-管理员并发处理同一条 Feedback 时，服务端接受第一个有效的状态迁移：
-
-* 被接受的迁移决定最终状态和 Reply。
-* 后续操作不会覆盖已接受的处理结果。
-* 前端重新加载 Feedback，并展示最终状态。
-
-Feedback 进入终态后不再接受处理请求。管理员因网络超时重复发送请求时，服务端根据当前状态拒绝重复处理，不重复
-创建 Reply 或 Notification。
+管理员通过回复或“标记为已处理”完成 `new` 状态的 Feedback。多名管理员并发处理同一条 Feedback 时，第一个成功的
+操作决定其终态，其他管理员看到最终生效的状态。
 
 ### 回复与通知
 
-Reply、Feedback 状态变化和 In-Product Notification 作为一次完整操作保存。
-
-如果保存 Reply 或创建通知记录失败：
-
-* Feedback 保持 `new`。
-* 不保存不完整的 Reply。
-* 不创建用户通知。
-* 管理员未发送的回复继续保留在表单中，可以重试。
-* 界面提示操作失败，并允许重试。
-
-完整操作成功后，界面显示“回复已发送”。通知记录保存后，即使导航栏角标刷新失败，也不影响通知；用户下次打开
-通知列表时仍然可以查看通知。
-
-将 Feedback 标记为 `handled` 时不创建 Notification。
+管理员成功发送 Reply 后，Feedback 进入 `replied` 状态，并为提交用户创建
+[In-Product Notification](./in-product-notification.zh.md)。操作失败时，表单保留 Reply 草稿，管理员可以重试。
 
 ## User Story
 
-### 用户提交反馈
+### 用户反馈工程问题
 
-用户遇到功能异常、运行结果不符合预期或不知道如何继续时，可以从头像菜单提交 Feedback。用户决定是否分享
-Context；提交失败时，可以在原内容基础上重试。
+用户测试工程时遇到与预期不符的结果。用户从头像菜单打开 Feedback，描述问题，选择分享 Context 并提交。管理员可以
+从这条 Feedback 中了解问题描述和问题发生时的工程状态。
 
 ### 用户请求 Copilot 整理反馈
 
-用户在 Copilot 对话中提出需要反馈。Copilot 生成草稿并打开 Feedback 表单，用户检查和修改后提交。
+用户在 Copilot 对话中提出需要提交 Feedback。Copilot 准备草稿，并在用户确认后打开 Feedback 表单。用户检查草稿、
+选择是否分享 Context，然后提交 Feedback。
 
-### 管理员处理反馈
+### 用户反馈 AI 功能或额度问题
 
-拥有 `feedbackAdmin` 的管理员查看 Feedback 详情，并根据 Context 排查问题。需要时，管理员可以在编辑器中打开
-Project Snapshot；处理完成后回复用户或将 Feedback 标记为无需回复。
+用户在 Copilot、Costume 生成或 Animation 生成中遇到功能或额度问题。对应提示为该功能打开 Feedback，用户检查并
+提交反馈内容。
+
+### 管理员处理 Feedback
+
+管理员打开 `new` 状态的 Feedback，并根据 Context 排查问题。管理员可以在编辑器中打开 Project Snapshot，然后回复
+用户或将 Feedback 标记为 `handled`。
 
 ### 用户查看回复
 
-管理员回复后，用户在导航栏看到未读通知，并从通知详情查看 Reply。
+管理员回复后，用户收到 In-Product Notification，并从通知中查看 Reply。

@@ -1,4 +1,8 @@
 <script lang="ts">
+/** Precision for video time values in ms */
+const precision = 100
+const frameInterval = 200
+
 type PlayRange = {
   /** Timepoint in ms to start playing */
   start: number
@@ -73,7 +77,9 @@ function useVideoPlayer(videoRef: Ref<HTMLVideoElement | null>, rangeRef: WatchS
     (video, _, onCleanup) => {
       if (video == null) return
       const handleLoadedMetadata = () => {
-        duration.value = Number.isFinite(video.duration) ? Math.round(video.duration * 1000) : 0
+        duration.value = Number.isFinite(video.duration)
+          ? Math.floor(Math.round(video.duration * 1000) / precision) * precision
+          : 0
       }
       video.addEventListener('loadedmetadata', handleLoadedMetadata)
       const handleSeeked = () => flushPendingSeek(video)
@@ -160,13 +166,10 @@ const cutStartRef = ref(0)
 const cutEndRef = ref(0)
 
 function notifyFramesConfigChanged() {
-  const duration = cutEndRef.value - cutStartRef.value
-  // TODO: We may improve the interval calculation logic later
-  const interval = duration >= 2000 ? 300 : 100
   emit('update:framesConfig', {
     startTime: cutStartRef.value,
     duration: cutEndRef.value - cutStartRef.value,
-    interval
+    interval: frameInterval
   })
 }
 
@@ -338,8 +341,6 @@ function adjustEndTime(newTime: number, videoDuration: number, withSnap = false)
   return clamp(time, cutStartRef.value + minDuration, videoDuration)
 }
 
-/** Precision for snapping in ms */
-const precision = 100
 /** Minimum allowed segment duration in ms */
 const minDuration = precision
 

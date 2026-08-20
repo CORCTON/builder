@@ -31,7 +31,10 @@ import {
 } from './common'
 import type { SpriteGen } from './sprite-gen'
 
-export type FramesConfig = Omit<TaskParamsExtractVideoFrames, 'videoUrl'>
+export type FramesConfig = Omit<TaskParamsExtractVideoFrames, 'videoUrl' | 'interval'> & {
+  /** Interval between frames in milliseconds. */
+  interval: number
+}
 
 export type AnimationGenInits = {
   id?: string
@@ -216,7 +219,7 @@ export class AnimationGen extends Disposable {
   get result() {
     return this.finishPhase.state.result
   }
-  private async createAnimationFromFrames(frameUrls: string[]) {
+  private async createAnimationFromFrames(frameUrls: string[], frameIntervalInMs: number) {
     const frameImgs = frameUrls.map((url) => createFileWithUniversalUrl(url))
     const costumes = await Promise.all(
       frameImgs.map(async (img, i) => {
@@ -226,7 +229,10 @@ export class AnimationGen extends Disposable {
         return costume
       })
     )
-    return Animation.create(this.settings.name, costumes)
+    return Animation.create(this.settings.name, costumes, {
+      // Preserve the frame sampling cadence in the generated animation.
+      duration: (costumes.length * frameIntervalInMs) / 1000
+    })
   }
   async finish() {
     const { video, framesConfig } = this
@@ -238,15 +244,16 @@ export class AnimationGen extends Disposable {
       this.extractFramesTask = new Task(TaskType.ExtractVideoFrames)
       await this.extractFramesTask.start({ videoUrl, ...framesConfig })
       const { frameUrls } = await this.extractFramesTask.untilCompleted(reporter)
-      return this.createAnimationFromFrames(frameUrls)
+      return this.createAnimationFromFrames(frameUrls, framesConfig.interval)
     })
   }
   restoreExtractFramesTask() {
     const task = this.extractFramesTask
-    if (task?.data == null || isTerminalTaskStatus(task.data.status)) return
+    const framesConfig = this.framesConfig
+    if (task?.data == null || isTerminalTaskStatus(task.data.status) || framesConfig == null) return
     this.finishPhase.run(async (reporter) => {
       const { frameUrls } = await task.untilCompleted(reporter)
-      return this.createAnimationFromFrames(frameUrls)
+      return this.createAnimationFromFrames(frameUrls, framesConfig.interval)
     })
   }
 

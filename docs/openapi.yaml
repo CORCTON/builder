@@ -8175,7 +8175,7 @@ components:
                 - frameUrls
               properties:
                 frameUrls:
-                  description: Universal URLs of the extracted WebP frame images (e.g. kodo://bucket/key).
+                  description: Universal URLs of the extracted frame images (e.g. kodo://bucket/key).
                   type: array
                   items:
                     type: string
@@ -8186,7 +8186,7 @@ components:
                 - imageUrls
               properties:
                 imageUrls:
-                  description: Universal URLs of the generated WebP backdrop images (e.g. kodo://bucket/key).
+                  description: Universal URLs of the generated backdrop images (e.g. kodo://bucket/key).
                   type: array
                   items:
                     type: string

@@ -22,10 +22,10 @@ describe('notification APIs', () => {
   })
 
   it('marks a notification as read', async () => {
-    const notification = { id: 'notification/1', readAt: '2026-08-26T00:00:00Z' }
+    const notification = { id: '11', readAt: '2026-08-26T00:00:00Z' }
     const patch = vi.spyOn(client, 'patch').mockResolvedValue(notification)
 
-    await expect(markUserNotificationRead('notification/1')).resolves.toBe(notification)
-    expect(patch).toHaveBeenCalledWith('/user/notifications/notification%2F1', { read: true })
+    await expect(markUserNotificationRead('11')).resolves.toBe(notification)
+    expect(patch).toHaveBeenCalledWith('/user/notifications/11', { read: true })
   })
 })

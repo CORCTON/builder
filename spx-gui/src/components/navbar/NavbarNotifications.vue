@@ -45,6 +45,10 @@ const notificationRadar = computed(() => ({
 let requestSequence = 0
 let unreadRequestSequence = 0
 
+function invalidateUnreadCountRequests() {
+  unreadRequestSequence += 1
+}
+
 async function refreshUnreadCount() {
   const userID = signedInUser.value?.id
   if (userID == null) return
@@ -62,7 +66,8 @@ async function refreshUnreadCount() {
 async function loadNotifications(reset: boolean) {
   if (signedInUser.value == null || loading.value) return
   const sequence = ++requestSequence
-  unreadRequestSequence += 1
+  invalidateUnreadCountRequests()
+  const unreadSequence = unreadRequestSequence
   const pageIndex = reset ? 1 : nextPage.value
   loading.value = true
   try {
@@ -70,7 +75,7 @@ async function loadNotifications(reset: boolean) {
     if (sequence !== requestSequence) return
     notifications.value = reset ? result.data : [...notifications.value, ...result.data]
     total.value = result.total
-    unreadCount.value = result.unreadCount
+    if (unreadSequence === unreadRequestSequence) unreadCount.value = result.unreadCount
     nextPage.value = pageIndex + 1
   } finally {
     if (sequence === requestSequence) loading.value = false
@@ -95,7 +100,8 @@ const handleOpenNotification = useMessageHandle(
 
     const userID = signedInUser.value?.id
     if (userID == null) return
-    unreadRequestSequence += 1
+    // Prevent an older count request from overwriting this optimistic update.
+    invalidateUnreadCountRequests()
     const optimisticReadAt = new Date().toISOString()
     notification.readAt = optimisticReadAt
     unreadCount.value = Math.max(0, unreadCount.value - 1)
@@ -121,21 +127,30 @@ function backToList() {
   selectedNotificationID.value = null
 }
 
+function isValidActionPath(value: string) {
+  return value.startsWith('/') && !value.startsWith('//') && !value.includes('\\')
+}
+
 async function openAction() {
   const actionPath = selectedNotification.value?.actionPath
-  if (actionPath == null) return
+  if (actionPath == null || !isValidActionPath(actionPath)) return
   visible.value = false
   await router.push(actionPath)
 }
 
+const dateTimeFormatter = computed(
+  () =>
+    new Intl.DateTimeFormat(i18n.lang.value === 'zh' ? 'zh-CN' : 'en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    })
+)
+
 function formatTime(value: string) {
-  return new Intl.DateTimeFormat(i18n.lang.value === 'zh' ? 'zh-CN' : 'en-US', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit'
-  }).format(new Date(value))
+  return dateTimeFormatter.value.format(new Date(value))
 }
 
 function refreshWhenVisible() {
@@ -146,7 +161,7 @@ watch(
   () => signedInUser.value?.id ?? null,
   (userID) => {
     requestSequence += 1
-    unreadRequestSequence += 1
+    invalidateUnreadCountRequests()
     notifications.value = []
     total.value = 0
     unreadCount.value = 0

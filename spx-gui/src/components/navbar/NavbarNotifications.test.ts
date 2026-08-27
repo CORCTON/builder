@@ -150,6 +150,54 @@ describe('NavbarNotifications', () => {
     expect(mocks.push).toHaveBeenCalledWith(notification.actionPath)
   })
 
+  it('does not overwrite an optimistic unread count with a stale page response', async () => {
+    mocks.useSignedInUser.mockReturnValue(ref({ id: 'user-1' }))
+    mocks.unreadCount.mockResolvedValue({ unreadCount: 2 })
+    const pendingPage = deferred<{ total: number; unreadCount: number; data: (typeof notification)[] }>()
+    mocks.list
+      .mockResolvedValueOnce({ total: 2, unreadCount: 2, data: [{ ...notification }] })
+      .mockReturnValueOnce(pendingPage.promise)
+    mocks.markRead.mockResolvedValue({ ...notification, readAt: '2026-08-26T07:01:00Z' })
+
+    const wrapper = mountNotifications()
+    await flushPromises()
+    await wrapper.get('[aria-label="Notifications, 2 unread"]').trigger('click')
+    await flushPromises()
+
+    const loadMoreButton = wrapper.findAll('button').find((button) => button.text().includes('Load more'))
+    await loadMoreButton!.trigger('click')
+    const notificationButton = wrapper.findAll('button').find((button) => button.text().includes(notification.title))
+    await notificationButton!.trigger('click')
+    await flushPromises()
+    expect(wrapper.get('[aria-label="Notifications, 1 unread"]').text()).toContain('1')
+
+    pendingPage.resolve({ total: 2, unreadCount: 2, data: [] })
+    await flushPromises()
+    expect(wrapper.get('[aria-label="Notifications, 1 unread"]').text()).toContain('1')
+  })
+
+  it('does not open an unsafe notification action', async () => {
+    mocks.useSignedInUser.mockReturnValue(ref({ id: 'user-1' }))
+    mocks.unreadCount.mockResolvedValue({ unreadCount: 0 })
+    mocks.list.mockResolvedValue({
+      total: 1,
+      unreadCount: 0,
+      data: [{ ...notification, actionPath: `/\\example.com`, readAt: '2026-08-26T07:00:00Z' }]
+    })
+
+    const wrapper = mountNotifications()
+    await flushPromises()
+    await wrapper.get('[aria-label="Notifications"]').trigger('click')
+    await flushPromises()
+    const notificationButton = wrapper.findAll('button').find((button) => button.text().includes(notification.title))
+    await notificationButton!.trigger('click')
+    const viewDetailsButton = wrapper.findAll('button').find((button) => button.text().includes('View details'))
+    await viewDetailsButton!.trigger('click')
+    await flushPromises()
+
+    expect(mocks.push).not.toHaveBeenCalled()
+  })
+
   it('does not roll an old failed read request back into a new user session', async () => {
     const user = ref<{ id: string } | null>({ id: 'user-1' })
     const pendingRead = deferred<typeof notification>()

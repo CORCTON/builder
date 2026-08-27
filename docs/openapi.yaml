@@ -7368,7 +7368,7 @@ components:
           type: string
           minLength: 1
           maxLength: 2000
-          pattern: "^/(?!/)"
+          pattern: '^/(?!/)[^\\]*$'
           examples:
             - /feedbacks/123
         readAt:

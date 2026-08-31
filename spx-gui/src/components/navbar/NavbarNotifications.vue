@@ -9,23 +9,21 @@ import { useSignedInUser } from '@/stores/user'
 import { UIButton, UIIcon, UIModal } from '@/components/ui'
 
 const pageSize = 50
-// Notifications arrive out of band, so this feature explicitly opts into lightweight freshness checks.
-const refreshInterval = 5 * 60_000
 
 const router = useRouter()
 const i18n = useI18n()
 const signedInUser = useSignedInUser()
 const visible = ref(false)
 const notifications = ref<notificationApis.UserNotification[]>([])
-const total = ref(0)
 const unreadCount = ref(0)
-const nextPage = ref(1)
+const nextCursor = ref<string | null>(null)
 const loading = ref(false)
+const markingReadNotificationIDs = ref(new Set<string>())
 const selectedNotificationID = ref<string | null>(null)
 const selectedNotification = computed(
   () => notifications.value.find((notification) => notification.id === selectedNotificationID.value) ?? null
 )
-const hasMore = computed(() => notifications.value.length < total.value)
+const hasMore = computed(() => nextCursor.value != null)
 const notificationLabel = computed(() =>
   unreadCount.value === 0
     ? i18n.t({ en: 'Notifications', zh: '通知' })
@@ -42,43 +40,49 @@ const notificationRadar = computed(() => ({
         })
 }))
 
-let requestSequence = 0
-let unreadRequestSequence = 0
-
-function invalidateUnreadCountRequests() {
-  unreadRequestSequence += 1
-}
+let listRequest: AbortController | null = null
+let unreadCountRequest: AbortController | null = null
+const readRequests = new Map<string, AbortController>()
 
 async function refreshUnreadCount() {
-  const userID = signedInUser.value?.id
-  if (userID == null) return
-  const sequence = ++unreadRequestSequence
+  if (signedInUser.value == null || readRequests.size > 0) return
+  unreadCountRequest?.abort()
+  const request = new AbortController()
+  unreadCountRequest = request
   try {
-    const result = await notificationApis.getUserNotificationUnreadCount()
-    if (sequence === unreadRequestSequence && signedInUser.value?.id === userID) {
-      unreadCount.value = result.unreadCount
-    }
+    const result = await notificationApis.getUserNotificationUnreadCount(request.signal)
+    request.signal.throwIfAborted()
+    unreadCount.value = result.unreadCount
   } catch (error) {
-    capture(error, 'Failed to refresh unread notification count')
+    if (!request.signal.aborted) capture(error, 'Failed to refresh unread notification count')
+  } finally {
+    if (unreadCountRequest === request) unreadCountRequest = null
   }
 }
 
 async function loadNotifications(reset: boolean) {
-  if (signedInUser.value == null || loading.value) return
-  const sequence = ++requestSequence
-  invalidateUnreadCountRequests()
-  const unreadSequence = unreadRequestSequence
-  const pageIndex = reset ? 1 : nextPage.value
+  if (signedInUser.value == null || (loading.value && !reset)) return
+  if (reset) listRequest?.abort()
+  const cursor = reset ? undefined : nextCursor.value ?? undefined
+  if (!reset && cursor == null) return
+  const request = new AbortController()
+  listRequest = request
   loading.value = true
   try {
-    const result = await notificationApis.listUserNotifications({ pageIndex, pageSize })
-    if (sequence !== requestSequence) return
+    const result = await notificationApis.listUserNotifications(
+      { pageSize, ...(cursor != null ? { cursor } : {}) },
+      request.signal
+    )
+    request.signal.throwIfAborted()
     notifications.value = reset ? result.data : [...notifications.value, ...result.data]
-    total.value = result.total
-    if (unreadSequence === unreadRequestSequence) unreadCount.value = result.unreadCount
-    nextPage.value = pageIndex + 1
+    nextCursor.value = result.nextCursor
+  } catch (error) {
+    if (!request.signal.aborted) throw error
   } finally {
-    if (sequence === requestSequence) loading.value = false
+    if (listRequest === request) {
+      listRequest = null
+      loading.value = false
+    }
   }
 }
 
@@ -90,34 +94,36 @@ const handleLoadNotifications = useMessageHandle(loadNotifications, {
 function openNotificationCenter() {
   selectedNotificationID.value = null
   visible.value = true
+  refreshUnreadCount()
   handleLoadNotifications(true)
 }
 
 const handleOpenNotification = useMessageHandle(
   async (notification: notificationApis.UserNotification) => {
     selectedNotificationID.value = notification.id
-    if (notification.readAt != null) return
+    if (notification.readAt != null || readRequests.has(notification.id)) return
 
-    const userID = signedInUser.value?.id
-    if (userID == null) return
-    // Prevent an older count request from overwriting this optimistic update.
-    invalidateUnreadCountRequests()
-    const optimisticReadAt = new Date().toISOString()
-    notification.readAt = optimisticReadAt
-    unreadCount.value = Math.max(0, unreadCount.value - 1)
-    const isCurrentNotification = () =>
-      signedInUser.value?.id === userID &&
-      notifications.value.includes(notification) &&
-      notification.readAt === optimisticReadAt
+    unreadCountRequest?.abort()
+    const request = new AbortController()
+    readRequests.set(notification.id, request)
+    markingReadNotificationIDs.value.add(notification.id)
     try {
-      const updated = await notificationApis.markUserNotificationRead(notification.id)
-      if (isCurrentNotification()) notification.readAt = updated.readAt
-    } catch (error) {
-      if (isCurrentNotification()) {
-        notification.readAt = null
-        unreadCount.value += 1
+      const updated = await notificationApis.markUserNotificationRead(notification.id, request.signal)
+      request.signal.throwIfAborted()
+      listRequest?.abort()
+      const currentNotification = notifications.value.find((item) => item.id === notification.id) ?? null
+      if (currentNotification != null && currentNotification.readAt == null && updated.readAt != null) {
+        currentNotification.readAt = updated.readAt
+        unreadCount.value = Math.max(0, unreadCount.value - 1)
       }
-      throw error
+    } catch (error) {
+      if (!request.signal.aborted) throw error
+    } finally {
+      if (readRequests.get(notification.id) === request) {
+        readRequests.delete(notification.id)
+        markingReadNotificationIDs.value.delete(notification.id)
+        if (readRequests.size === 0) refreshUnreadCount()
+      }
     }
   },
   { en: 'Failed to mark notification as read', zh: '通知标记已读失败' }
@@ -160,13 +166,17 @@ function refreshWhenVisible() {
 watch(
   () => signedInUser.value?.id ?? null,
   (userID) => {
-    requestSequence += 1
-    invalidateUnreadCountRequests()
+    listRequest?.abort()
+    unreadCountRequest?.abort()
+    for (const request of readRequests.values()) request.abort()
+    listRequest = null
+    unreadCountRequest = null
+    readRequests.clear()
+    markingReadNotificationIDs.value.clear()
     notifications.value = []
-    total.value = 0
     unreadCount.value = 0
     loading.value = false
-    nextPage.value = 1
+    nextCursor.value = null
     selectedNotificationID.value = null
     visible.value = false
     if (userID != null) refreshUnreadCount()
@@ -174,13 +184,13 @@ watch(
   { immediate: true }
 )
 
-let refreshTimer: number | null = null
 onMounted(() => {
-  refreshTimer = window.setInterval(refreshUnreadCount, refreshInterval)
   document.addEventListener('visibilitychange', refreshWhenVisible)
 })
 onUnmounted(() => {
-  if (refreshTimer != null) window.clearInterval(refreshTimer)
+  listRequest?.abort()
+  unreadCountRequest?.abort()
+  for (const request of readRequests.values()) request.abort()
   document.removeEventListener('visibilitychange', refreshWhenVisible)
 })
 </script>
@@ -307,7 +317,12 @@ onUnmounted(() => {
       </template>
 
       <article v-else class="max-h-[480px] overflow-y-auto px-5 py-5">
-        <time class="text-xs text-grey-800">{{ formatTime(selectedNotification.createdAt) }}</time>
+        <div class="flex items-center gap-2 text-xs text-grey-800">
+          <time>{{ formatTime(selectedNotification.createdAt) }}</time>
+          <span v-if="markingReadNotificationIDs.has(selectedNotification.id)">
+            {{ $t({ en: 'Marking as read...', zh: '正在标记已读...' }) }}
+          </span>
+        </div>
         <p class="mt-3 whitespace-pre-wrap text-sm leading-6 text-grey-1000">{{ selectedNotification.body }}</p>
         <UIButton v-if="selectedNotification.actionPath != null" class="mt-6" type="primary" @click="openAction">
           {{ $t({ en: 'View details', zh: '查看详情' }) }}

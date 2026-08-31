@@ -1,4 +1,4 @@
-import { client, type PaginationParams } from './common'
+import { client } from './common'
 
 export type UserNotification = {
   id: string
@@ -11,21 +11,29 @@ export type UserNotification = {
 }
 
 export type UserNotifications = {
-  total: number
-  unreadCount: number
+  nextCursor: string | null
   data: UserNotification[]
 }
 
-export function listUserNotifications(params?: PaginationParams) {
-  return client.get('/user/notifications', params) as Promise<UserNotifications>
+export type ListUserNotificationsParams = {
+  pageSize?: number
+  cursor?: string
 }
 
-export function getUserNotificationUnreadCount() {
-  return client.get('/user/notifications/unread-count') as Promise<Pick<UserNotifications, 'unreadCount'>>
+export function listUserNotifications(params?: ListUserNotificationsParams, signal?: AbortSignal) {
+  return client.get('/user/notifications', params, { signal }) as Promise<UserNotifications>
 }
 
-export function markUserNotificationRead(notificationID: string) {
-  return client.patch(`/user/notifications/${encodeURIComponent(notificationID)}`, {
-    read: true
-  }) as Promise<UserNotification>
+export function getUserNotificationUnreadCount(signal?: AbortSignal) {
+  return client.get('/user/notifications/unread-count', undefined, { signal }) as Promise<{ unreadCount: number }>
+}
+
+export function markUserNotificationRead(notificationID: string, signal?: AbortSignal) {
+  return client.patch(
+    `/user/notifications/${encodeURIComponent(notificationID)}`,
+    {
+      read: true
+    },
+    { signal }
+  ) as Promise<UserNotification>
 }

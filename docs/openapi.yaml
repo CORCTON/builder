@@ -1042,10 +1042,17 @@ paths:
       tags:
         - Notifications
       summary: List notifications for the authenticated user
-      description: Retrieve persistent in-product notifications, ordered from newest to oldest.
+      description: |
+        Retrieve persistent in-product notifications, ordered from newest to oldest.
+
+        To load the next page, pass the opaque `nextCursor` returned by the previous response.
       parameters:
-        - $ref: "#/components/parameters/PageIndex"
         - $ref: "#/components/parameters/PageSize"
+        - name: cursor
+          description: Opaque cursor returned as `nextCursor` by the previous page.
+          in: query
+          schema:
+            type: string
       responses:
         "200":
           description: Successful response.
@@ -1054,17 +1061,14 @@ paths:
               schema:
                 type: object
                 required:
-                  - total
-                  - unreadCount
+                  - nextCursor
                   - data
                 properties:
-                  total:
-                    $ref: "#/components/schemas/ByPage/properties/total"
-                  unreadCount:
-                    description: Current number of unread notifications for the authenticated user.
-                    type: integer
-                    format: int64
-                    minimum: 0
+                  nextCursor:
+                    description: Opaque cursor for the next page, or null when there are no older notifications.
+                    type:
+                      - string
+                      - "null"
                   data:
                     type: array
                     items:

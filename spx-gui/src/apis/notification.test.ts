@@ -6,11 +6,12 @@ afterEach(() => vi.restoreAllMocks())
 
 describe('notification APIs', () => {
   it('lists authenticated user notifications with pagination', async () => {
-    const response = { total: 0, unreadCount: 0, data: [] }
+    const response = { nextCursor: null, data: [] }
     const get = vi.spyOn(client, 'get').mockResolvedValue(response)
 
-    await expect(listUserNotifications({ pageIndex: 2, pageSize: 50 })).resolves.toBe(response)
-    expect(get).toHaveBeenCalledWith('/user/notifications', { pageIndex: 2, pageSize: 50 })
+    const params = { pageSize: 50, cursor: 'next-page' }
+    await expect(listUserNotifications(params)).resolves.toBe(response)
+    expect(get).toHaveBeenCalledWith('/user/notifications', params, { signal: undefined })
   })
 
   it('gets the unread notification count', async () => {
@@ -18,7 +19,7 @@ describe('notification APIs', () => {
     const get = vi.spyOn(client, 'get').mockResolvedValue(response)
 
     await expect(getUserNotificationUnreadCount()).resolves.toBe(response)
-    expect(get).toHaveBeenCalledWith('/user/notifications/unread-count')
+    expect(get).toHaveBeenCalledWith('/user/notifications/unread-count', undefined, { signal: undefined })
   })
 
   it('marks a notification as read', async () => {
@@ -26,6 +27,6 @@ describe('notification APIs', () => {
     const patch = vi.spyOn(client, 'patch').mockResolvedValue(notification)
 
     await expect(markUserNotificationRead('11')).resolves.toBe(notification)
-    expect(patch).toHaveBeenCalledWith('/user/notifications/11', { read: true })
+    expect(patch).toHaveBeenCalledWith('/user/notifications/11', { read: true }, { signal: undefined })
   })
 })

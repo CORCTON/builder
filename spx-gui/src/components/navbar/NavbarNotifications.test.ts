@@ -9,7 +9,7 @@ const mocks = vi.hoisted(() => ({
   useSignedInUser: vi.fn(),
   push: vi.fn(),
   list: vi.fn(),
-  unreadCount: vi.fn(),
+  status: vi.fn(),
   markRead: vi.fn()
 }))
 
@@ -17,7 +17,7 @@ vi.mock('@/stores/user', () => ({ useSignedInUser: mocks.useSignedInUser }))
 vi.mock('vue-router', () => ({ useRouter: () => ({ push: mocks.push }) }))
 vi.mock('@/apis/notification', () => ({
   listUserNotifications: mocks.list,
-  getUserNotificationUnreadCount: mocks.unreadCount,
+  getUserNotificationStatus: mocks.status,
   markUserNotificationRead: mocks.markRead
 }))
 vi.mock('@/utils/exception', async (importOriginal) => {
@@ -99,30 +99,30 @@ describe('NavbarNotifications', () => {
     await flushPromises()
 
     expect(wrapper.find('button').exists()).toBe(false)
-    expect(mocks.unreadCount).not.toHaveBeenCalled()
+    expect(mocks.status).not.toHaveBeenCalled()
   })
 
   it('refreshes the unread count when opened and when the page becomes visible', async () => {
     mocks.useSignedInUser.mockReturnValue(ref({ id: 'user-1' }))
-    mocks.unreadCount.mockResolvedValue({ unreadCount: 1 })
+    mocks.status.mockResolvedValue({ hasUnread: true })
 
     const wrapper = mountNotifications()
     await flushPromises()
-    expect(mocks.unreadCount).toHaveBeenCalledTimes(1)
+    expect(mocks.status).toHaveBeenCalledTimes(1)
 
-    await wrapper.get('[aria-label="Notifications, 1 unread"]').trigger('click')
+    await wrapper.get('[aria-label="Notifications, unread notifications available"]').trigger('click')
     await flushPromises()
-    expect(mocks.unreadCount).toHaveBeenCalledTimes(2)
+    expect(mocks.status).toHaveBeenCalledTimes(2)
 
     Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'visible' })
     document.dispatchEvent(new Event('visibilitychange'))
     await flushPromises()
-    expect(mocks.unreadCount).toHaveBeenCalledTimes(3)
+    expect(mocks.status).toHaveBeenCalledTimes(3)
   })
 
   it('loads pages, marks a notification read, and opens its application route', async () => {
     mocks.useSignedInUser.mockReturnValue(ref({ id: 'user-1' }))
-    mocks.unreadCount.mockResolvedValueOnce({ unreadCount: 1 }).mockResolvedValue({ unreadCount: 0 })
+    mocks.status.mockResolvedValueOnce({ hasUnread: true }).mockResolvedValue({ hasUnread: false })
     mocks.list.mockResolvedValueOnce({ nextCursor: 'next-page', data: [{ ...notification }] }).mockResolvedValueOnce({
       nextCursor: null,
       data: [
@@ -139,7 +139,7 @@ describe('NavbarNotifications', () => {
 
     const wrapper = mountNotifications()
     await flushPromises()
-    await wrapper.get('[aria-label="Notifications, 1 unread"]').trigger('click')
+    await wrapper.get('[aria-label="Notifications, unread notifications available"]').trigger('click')
     await flushPromises()
     expect(mocks.list).toHaveBeenNthCalledWith(1, { pageSize: 50 }, expect.any(AbortSignal))
 
@@ -171,10 +171,7 @@ describe('NavbarNotifications', () => {
 
   it('does not overwrite a completed read with a stale cursor page response', async () => {
     mocks.useSignedInUser.mockReturnValue(ref({ id: 'user-1' }))
-    mocks.unreadCount
-      .mockResolvedValueOnce({ unreadCount: 2 })
-      .mockResolvedValueOnce({ unreadCount: 2 })
-      .mockResolvedValue({ unreadCount: 1 })
+    mocks.status.mockResolvedValue({ hasUnread: true })
     const pendingPage = deferred<{
       nextCursor: string | null
       data: (typeof notification)[]
@@ -186,7 +183,7 @@ describe('NavbarNotifications', () => {
 
     const wrapper = mountNotifications()
     await flushPromises()
-    await wrapper.get('[aria-label="Notifications, 2 unread"]').trigger('click')
+    await wrapper.get('[aria-label="Notifications, unread notifications available"]').trigger('click')
     await flushPromises()
 
     const loadMoreButton = wrapper.findAll('button').find((button) => button.text().includes('Load more'))
@@ -194,49 +191,51 @@ describe('NavbarNotifications', () => {
     const notificationButton = wrapper.findAll('button').find((button) => button.text().includes(notification.title))
     await notificationButton!.trigger('click')
     await flushPromises()
-    expect(wrapper.get('[aria-label="Notifications, 1 unread"]').text()).toContain('1')
+    expect(wrapper.get('[aria-label="Notifications, unread notifications available"]').find('.absolute').exists()).toBe(
+      true
+    )
 
     pendingPage.resolve({ nextCursor: null, data: [] })
     await flushPromises()
-    expect(wrapper.get('[aria-label="Notifications, 1 unread"]').text()).toContain('1')
+    expect(wrapper.get('[aria-label="Notifications, unread notifications available"]').find('.absolute').exists()).toBe(
+      true
+    )
   })
 
   it('waits for mark-as-read and defers count refresh while the request is pending', async () => {
     mocks.useSignedInUser.mockReturnValue(ref({ id: 'user-1' }))
-    mocks.unreadCount
-      .mockResolvedValueOnce({ unreadCount: 2 })
-      .mockResolvedValueOnce({ unreadCount: 2 })
-      .mockResolvedValue({ unreadCount: 1 })
+    mocks.status.mockResolvedValue({ hasUnread: true })
     mocks.list.mockResolvedValue({ nextCursor: null, data: [{ ...notification }] })
     const pendingRead = deferred<typeof notification>()
     mocks.markRead.mockReturnValue(pendingRead.promise)
 
     const wrapper = mountNotifications()
     await flushPromises()
-    await wrapper.get('[aria-label="Notifications, 2 unread"]').trigger('click')
+    await wrapper.get('[aria-label="Notifications, unread notifications available"]').trigger('click')
     await flushPromises()
     const notificationButton = wrapper.findAll('button').find((button) => button.text().includes(notification.title))
     await notificationButton!.trigger('click')
 
-    expect(wrapper.get('[aria-label="Notifications, 2 unread"]').text()).toContain('2')
+    expect(wrapper.get('[aria-label="Notifications, unread notifications available"]').find('.absolute').exists()).toBe(
+      true
+    )
     Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'visible' })
     document.dispatchEvent(new Event('visibilitychange'))
     await flushPromises()
-    expect(mocks.unreadCount).toHaveBeenCalledTimes(2)
+    expect(mocks.status).toHaveBeenCalledTimes(2)
 
     pendingRead.resolve({ ...notification, readAt: '2026-08-26T07:01:00Z' })
     await flushPromises()
-    expect(mocks.unreadCount).toHaveBeenCalledTimes(3)
-    expect(wrapper.get('[aria-label="Notifications, 1 unread"]').text()).toContain('1')
+    expect(mocks.status).toHaveBeenCalledTimes(3)
+    expect(wrapper.get('[aria-label="Notifications, unread notifications available"]').find('.absolute').exists()).toBe(
+      true
+    )
   })
 
   it('marks different notifications as read concurrently', async () => {
     const anotherNotification = { ...notification, id: '12', title: 'Another notification' }
     mocks.useSignedInUser.mockReturnValue(ref({ id: 'user-1' }))
-    mocks.unreadCount
-      .mockResolvedValueOnce({ unreadCount: 2 })
-      .mockResolvedValueOnce({ unreadCount: 2 })
-      .mockResolvedValue({ unreadCount: 1 })
+    mocks.status.mockResolvedValue({ hasUnread: true })
     mocks.list.mockResolvedValue({ nextCursor: null, data: [{ ...notification }, anotherNotification] })
     const firstRead = deferred<typeof notification>()
     const secondRead = deferred<typeof notification>()
@@ -244,7 +243,7 @@ describe('NavbarNotifications', () => {
 
     const wrapper = mountNotifications()
     await flushPromises()
-    await wrapper.get('[aria-label="Notifications, 2 unread"]').trigger('click')
+    await wrapper.get('[aria-label="Notifications, unread notifications available"]').trigger('click')
     await flushPromises()
     await wrapper
       .findAll('button')
@@ -267,7 +266,7 @@ describe('NavbarNotifications', () => {
 
   it('restarts the first page when reopened during an in-flight page request', async () => {
     mocks.useSignedInUser.mockReturnValue(ref({ id: 'user-1' }))
-    mocks.unreadCount.mockResolvedValue({ unreadCount: 0 })
+    mocks.status.mockResolvedValue({ hasUnread: false })
     const pendingPage = deferred<{ nextCursor: string | null; data: UserNotification[] }>()
     mocks.list
       .mockResolvedValueOnce({ nextCursor: 'next-page', data: [{ ...notification }] })
@@ -295,7 +294,7 @@ describe('NavbarNotifications', () => {
 
   it('does not open an unsafe notification action', async () => {
     mocks.useSignedInUser.mockReturnValue(ref({ id: 'user-1' }))
-    mocks.unreadCount.mockResolvedValue({ unreadCount: 0 })
+    mocks.status.mockResolvedValue({ hasUnread: false })
     mocks.list.mockResolvedValue({
       nextCursor: null,
       data: [{ ...notification, actionPath: `/\\example.com`, readAt: '2026-08-26T07:00:00Z' }]
@@ -318,18 +317,20 @@ describe('NavbarNotifications', () => {
     const user = ref<{ id: string } | null>({ id: 'user-1' })
     const pendingRead = deferred<typeof notification>()
     mocks.useSignedInUser.mockReturnValue(user)
-    mocks.unreadCount
-      .mockResolvedValueOnce({ unreadCount: 2 })
-      .mockResolvedValueOnce({ unreadCount: 2 })
-      .mockResolvedValueOnce({ unreadCount: 4 })
+    mocks.status
+      .mockResolvedValueOnce({ hasUnread: true })
+      .mockResolvedValueOnce({ hasUnread: true })
+      .mockResolvedValueOnce({ hasUnread: false })
     mocks.list.mockResolvedValue({ nextCursor: null, data: [{ ...notification }] })
     mocks.markRead.mockReturnValue(pendingRead.promise)
 
     const wrapper = mountNotifications()
     await flushPromises()
-    expect(wrapper.get('[aria-label="Notifications, 2 unread"]').text()).toContain('2')
+    expect(wrapper.get('[aria-label="Notifications, unread notifications available"]').find('.absolute').exists()).toBe(
+      true
+    )
 
-    await wrapper.get('[aria-label="Notifications, 2 unread"]').trigger('click')
+    await wrapper.get('[aria-label="Notifications, unread notifications available"]').trigger('click')
     await flushPromises()
     const notificationButton = wrapper.findAll('button').find((button) => button.text().includes(notification.title))
     expect(notificationButton).toBeDefined()
@@ -338,10 +339,10 @@ describe('NavbarNotifications', () => {
 
     user.value = { id: 'user-2' }
     await flushPromises()
-    expect(wrapper.get('[aria-label="Notifications, 4 unread"]').text()).toContain('4')
+    expect(wrapper.get('[aria-label="Notifications"]').find('.absolute').exists()).toBe(false)
 
     pendingRead.reject(new Error('old request failed'))
     await flushPromises()
-    expect(wrapper.get('[aria-label="Notifications, 4 unread"]').text()).toContain('4')
+    expect(wrapper.get('[aria-label="Notifications"]').find('.absolute').exists()).toBe(false)
   })
 })

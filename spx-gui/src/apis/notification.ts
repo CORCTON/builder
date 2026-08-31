@@ -24,8 +24,8 @@ export function listUserNotifications(params?: ListUserNotificationsParams, sign
   return client.get('/user/notifications', params, { signal }) as Promise<UserNotifications>
 }
 
-export function getUserNotificationUnreadCount(signal?: AbortSignal) {
-  return client.get('/user/notifications/unread-count', undefined, { signal }) as Promise<{ unreadCount: number }>
+export function getUserNotificationStatus(signal?: AbortSignal) {
+  return client.get('/user/notifications/status', undefined, { signal }) as Promise<{ hasUnread: boolean }>
 }
 
 export function markUserNotificationRead(notificationID: string, signal?: AbortSignal) {

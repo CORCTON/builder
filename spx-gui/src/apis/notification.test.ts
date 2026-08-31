@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { client } from './common'
-import { getUserNotificationUnreadCount, listUserNotifications, markUserNotificationRead } from './notification'
+import { getUserNotificationStatus, listUserNotifications, markUserNotificationRead } from './notification'
 
 afterEach(() => vi.restoreAllMocks())
 
@@ -14,12 +14,12 @@ describe('notification APIs', () => {
     expect(get).toHaveBeenCalledWith('/user/notifications', params, { signal: undefined })
   })
 
-  it('gets the unread notification count', async () => {
-    const response = { unreadCount: 3 }
+  it('gets the notification status', async () => {
+    const response = { hasUnread: true }
     const get = vi.spyOn(client, 'get').mockResolvedValue(response)
 
-    await expect(getUserNotificationUnreadCount()).resolves.toBe(response)
-    expect(get).toHaveBeenCalledWith('/user/notifications/unread-count', undefined, { signal: undefined })
+    await expect(getUserNotificationStatus()).resolves.toBe(response)
+    expect(get).toHaveBeenCalledWith('/user/notifications/status', undefined, { signal: undefined })
   })
 
   it('marks a notification as read', async () => {

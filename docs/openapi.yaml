@@ -1043,7 +1043,8 @@ paths:
         - Notifications
       summary: List notifications for the authenticated user
       description: |
-        Retrieve persistent in-product notifications, ordered from newest to oldest.
+        Retrieve persistent in-product notifications. Unread notifications are returned before read notifications;
+        each group is ordered from newest to oldest. Both groups share one cursor and pagination sequence.
 
         To load the next page, pass the opaque `nextCursor` returned by the previous response.
       parameters:
@@ -1078,13 +1079,13 @@ paths:
         "401":
           $ref: "#/components/responses/Unauthorized"
 
-  /user/notifications/unread-count:
+  /user/notifications/status:
     get:
-      operationId: getAuthenticatedUserNotificationUnreadCount
+      operationId: getAuthenticatedUserNotificationStatus
       tags:
         - Notifications
-      summary: Get the unread notification count
-      description: Retrieve the current number of unread notifications for the authenticated user.
+      summary: Get the notification status
+      description: Check whether the authenticated user has any unread notifications.
       responses:
         "200":
           description: Successful response.
@@ -1093,13 +1094,11 @@ paths:
               schema:
                 type: object
                 required:
-                  - unreadCount
+                  - hasUnread
                 properties:
-                  unreadCount:
-                    description: Current number of unread notifications for the authenticated user.
-                    type: integer
-                    format: int64
-                    minimum: 0
+                  hasUnread:
+                    description: Whether the authenticated user has at least one unread notification.
+                    type: boolean
         "401":
           $ref: "#/components/responses/Unauthorized"
 

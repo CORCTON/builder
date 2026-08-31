@@ -15,48 +15,43 @@ const i18n = useI18n()
 const signedInUser = useSignedInUser()
 const visible = ref(false)
 const notifications = ref<notificationApis.UserNotification[]>([])
-const unreadCount = ref(0)
 const nextCursor = ref<string | null>(null)
 const loading = ref(false)
+const hasUnread = ref(false)
 const markingReadNotificationIDs = ref(new Set<string>())
 const selectedNotificationID = ref<string | null>(null)
 const selectedNotification = computed(
   () => notifications.value.find((notification) => notification.id === selectedNotificationID.value) ?? null
 )
-const hasMore = computed(() => nextCursor.value != null)
 const notificationLabel = computed(() =>
-  unreadCount.value === 0
-    ? i18n.t({ en: 'Notifications', zh: '通知' })
-    : i18n.t({ en: `Notifications, ${unreadCount.value} unread`, zh: `通知，${unreadCount.value} 条未读` })
+  hasUnread.value
+    ? i18n.t({ en: 'Notifications, unread notifications available', zh: '通知，有未读通知' })
+    : i18n.t({ en: 'Notifications', zh: '通知' })
 )
 const notificationRadar = computed(() => ({
   name: notificationLabel.value,
-  desc:
-    unreadCount.value === 0
-      ? i18n.t({ en: 'Open in-product notifications', zh: '打开站内通知' })
-      : i18n.t({
-          en: `Open ${unreadCount.value} unread notifications`,
-          zh: `打开 ${unreadCount.value} 条未读通知`
-        })
+  desc: hasUnread.value
+    ? i18n.t({ en: 'Open unread in-product notifications', zh: '打开未读站内通知' })
+    : i18n.t({ en: 'Open in-product notifications', zh: '打开站内通知' })
 }))
 
 let listRequest: AbortController | null = null
-let unreadCountRequest: AbortController | null = null
+let statusRequest: AbortController | null = null
 const readRequests = new Map<string, AbortController>()
 
-async function refreshUnreadCount() {
+async function refreshNotificationStatus() {
   if (signedInUser.value == null || readRequests.size > 0) return
-  unreadCountRequest?.abort()
+  statusRequest?.abort()
   const request = new AbortController()
-  unreadCountRequest = request
+  statusRequest = request
   try {
-    const result = await notificationApis.getUserNotificationUnreadCount(request.signal)
+    const result = await notificationApis.getUserNotificationStatus(request.signal)
     request.signal.throwIfAborted()
-    unreadCount.value = result.unreadCount
+    hasUnread.value = result.hasUnread
   } catch (error) {
-    if (!request.signal.aborted) capture(error, 'Failed to refresh unread notification count')
+    if (!request.signal.aborted) capture(error, 'Failed to refresh notification status')
   } finally {
-    if (unreadCountRequest === request) unreadCountRequest = null
+    if (statusRequest === request) statusRequest = null
   }
 }
 
@@ -94,7 +89,7 @@ const handleLoadNotifications = useMessageHandle(loadNotifications, {
 function openNotificationCenter() {
   selectedNotificationID.value = null
   visible.value = true
-  refreshUnreadCount()
+  refreshNotificationStatus()
   handleLoadNotifications(true)
 }
 
@@ -103,7 +98,7 @@ const handleOpenNotification = useMessageHandle(
     selectedNotificationID.value = notification.id
     if (notification.readAt != null || readRequests.has(notification.id)) return
 
-    unreadCountRequest?.abort()
+    statusRequest?.abort()
     const request = new AbortController()
     readRequests.set(notification.id, request)
     markingReadNotificationIDs.value.add(notification.id)
@@ -114,7 +109,6 @@ const handleOpenNotification = useMessageHandle(
       const currentNotification = notifications.value.find((item) => item.id === notification.id) ?? null
       if (currentNotification != null && currentNotification.readAt == null && updated.readAt != null) {
         currentNotification.readAt = updated.readAt
-        unreadCount.value = Math.max(0, unreadCount.value - 1)
       }
     } catch (error) {
       if (!request.signal.aborted) throw error
@@ -122,7 +116,7 @@ const handleOpenNotification = useMessageHandle(
       if (readRequests.get(notification.id) === request) {
         readRequests.delete(notification.id)
         markingReadNotificationIDs.value.delete(notification.id)
-        if (readRequests.size === 0) refreshUnreadCount()
+        if (readRequests.size === 0) refreshNotificationStatus()
       }
     }
   },
@@ -160,26 +154,26 @@ function formatTime(value: string) {
 }
 
 function refreshWhenVisible() {
-  if (document.visibilityState === 'visible') refreshUnreadCount()
+  if (document.visibilityState === 'visible') refreshNotificationStatus()
 }
 
 watch(
   () => signedInUser.value?.id ?? null,
   (userID) => {
     listRequest?.abort()
-    unreadCountRequest?.abort()
+    statusRequest?.abort()
     for (const request of readRequests.values()) request.abort()
     listRequest = null
-    unreadCountRequest = null
+    statusRequest = null
     readRequests.clear()
     markingReadNotificationIDs.value.clear()
     notifications.value = []
-    unreadCount.value = 0
+    hasUnread.value = false
     loading.value = false
     nextCursor.value = null
     selectedNotificationID.value = null
     visible.value = false
-    if (userID != null) refreshUnreadCount()
+    if (userID != null) refreshNotificationStatus()
   },
   { immediate: true }
 )
@@ -189,7 +183,7 @@ onMounted(() => {
 })
 onUnmounted(() => {
   listRequest?.abort()
-  unreadCountRequest?.abort()
+  statusRequest?.abort()
   for (const request of readRequests.values()) request.abort()
   document.removeEventListener('visibilitychange', refreshWhenVisible)
 })
@@ -207,11 +201,9 @@ onUnmounted(() => {
       <span class="relative flex size-5 items-center justify-center">
         <UIIcon type="bell" />
         <span
-          v-if="unreadCount > 0"
-          class="absolute -top-1.5 -right-2 flex min-w-4.5 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] leading-4 text-white ring-2 ring-grey-100"
-        >
-          {{ unreadCount > 99 ? '99+' : unreadCount }}
-        </span>
+          v-if="hasUnread"
+          class="absolute -top-0.5 -right-1 size-2 rounded-full bg-red-500 ring-2 ring-grey-100"
+        ></span>
       </span>
     </button>
 
@@ -308,7 +300,7 @@ onUnmounted(() => {
               <UIIcon type="arrowRightSmall" class="mt-1 size-4 shrink-0 text-grey-600" />
             </div>
           </button>
-          <div v-if="hasMore" class="border-t border-grey-300 p-3 text-center">
+          <div v-if="nextCursor != null" class="border-t border-grey-300 p-3 text-center">
             <UIButton type="white" size="small" :loading="loading" @click="handleLoadNotifications(false)">
               {{ $t({ en: 'Load more', zh: '加载更多' }) }}
             </UIButton>

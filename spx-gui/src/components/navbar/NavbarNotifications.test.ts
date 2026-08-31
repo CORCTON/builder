@@ -190,14 +190,55 @@ describe('NavbarNotifications', () => {
 
     const loadMoreButton = wrapper.findAll('button').find((button) => button.text().includes('Load more'))
     await loadMoreButton!.trigger('click')
+    const pageSignal = mocks.list.mock.calls[2][1] as AbortSignal
     const notificationButton = wrapper.findAll('button').find((button) => button.text().includes(notification.title))
     await notificationButton!.trigger('click')
+    expect(pageSignal.aborted).toBe(true)
     await flushPromises()
     expect(wrapper.get('[aria-label="Notifications"]').find('.absolute').exists()).toBe(false)
 
     pendingPage.resolve({ hasUnread: true, nextCursor: null, data: [] })
     await flushPromises()
     expect(wrapper.get('[aria-label="Notifications"]').find('.absolute').exists()).toBe(false)
+  })
+
+  it('does not append a notification again when marking it read moves it behind the cursor', async () => {
+    const earlierNotification = {
+      ...notification,
+      id: '10',
+      createdAt: '2026-08-25T06:02:00Z',
+      title: 'Earlier notification',
+      readAt: '2026-08-26T07:00:00Z'
+    }
+    mocks.useSignedInUser.mockReturnValue(ref({ id: 'user-1' }))
+    mocks.list
+      .mockResolvedValueOnce({ hasUnread: true, nextCursor: 'next-page', data: [{ ...notification }] })
+      .mockResolvedValueOnce({ hasUnread: true, nextCursor: 'next-page', data: [{ ...notification }] })
+      .mockResolvedValueOnce({
+        hasUnread: false,
+        nextCursor: null,
+        data: [{ ...notification, readAt: '2026-08-26T07:01:00Z' }, earlierNotification]
+      })
+    mocks.markRead.mockResolvedValue({ ...notification, readAt: '2026-08-26T07:01:00Z' })
+
+    const wrapper = mountNotifications()
+    await flushPromises()
+    await wrapper.get('[aria-label="Notifications, unread notifications available"]').trigger('click')
+    await flushPromises()
+    await wrapper
+      .findAll('button')
+      .find((button) => button.text().includes(notification.title))!
+      .trigger('click')
+    await flushPromises()
+    await wrapper.get('[aria-label="Back to notifications"]').trigger('click')
+    await wrapper
+      .findAll('button')
+      .find((button) => button.text().includes('Load more'))!
+      .trigger('click')
+    await flushPromises()
+
+    expect(wrapper.findAll('button').filter((button) => button.text().includes(notification.title))).toHaveLength(1)
+    expect(wrapper.text()).toContain(earlierNotification.title)
   })
 
   it('waits for mark-as-read and defers list refresh while the request is pending', async () => {

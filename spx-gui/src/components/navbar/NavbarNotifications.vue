@@ -52,7 +52,12 @@ async function loadNotifications(reset: boolean) {
       request.signal
     )
     request.signal.throwIfAborted()
-    notifications.value = reset ? result.data : [...notifications.value, ...result.data]
+    if (reset) {
+      notifications.value = result.data
+    } else {
+      const loadedIDs = new Set(notifications.value.map((notification) => notification.id))
+      notifications.value.push(...result.data.filter((notification) => !loadedIDs.has(notification.id)))
+    }
     hasUnread.value = result.hasUnread
     nextCursor.value = result.nextCursor
   } catch (error) {
@@ -81,13 +86,13 @@ const handleOpenNotification = useMessageHandle(
     selectedNotificationID.value = notification.id
     if (notification.readAt != null || readRequests.has(notification.id)) return
 
+    listRequest?.abort()
     const request = new AbortController()
     readRequests.set(notification.id, request)
     markingReadNotificationIDs.value.add(notification.id)
     try {
       const updated = await notificationApis.markUserNotificationRead(notification.id, request.signal)
       request.signal.throwIfAborted()
-      listRequest?.abort()
       const currentNotification = notifications.value.find((item) => item.id === notification.id) ?? null
       if (currentNotification != null && currentNotification.readAt == null && updated.readAt != null) {
         currentNotification.readAt = updated.readAt

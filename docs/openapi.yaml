@@ -1062,9 +1062,13 @@ paths:
               schema:
                 type: object
                 required:
+                  - hasUnread
                   - nextCursor
                   - data
                 properties:
+                  hasUnread:
+                    description: Whether the authenticated user has at least one unread notification.
+                    type: boolean
                   nextCursor:
                     description: Opaque cursor for the next page, or null when there are no older notifications.
                     type:
@@ -1076,29 +1080,6 @@ paths:
                       $ref: "#/components/schemas/UserNotification"
         "400":
           $ref: "#/components/responses/BadRequest"
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-
-  /user/notifications/status:
-    get:
-      operationId: getAuthenticatedUserNotificationStatus
-      tags:
-        - Notifications
-      summary: Get the notification status
-      description: Check whether the authenticated user has any unread notifications.
-      responses:
-        "200":
-          description: Successful response.
-          content:
-            application/json:
-              schema:
-                type: object
-                required:
-                  - hasUnread
-                properties:
-                  hasUnread:
-                    description: Whether the authenticated user has at least one unread notification.
-                    type: boolean
         "401":
           $ref: "#/components/responses/Unauthorized"
 

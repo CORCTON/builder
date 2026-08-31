@@ -11,6 +11,7 @@ export type UserNotification = {
 }
 
 export type UserNotifications = {
+  hasUnread: boolean
   nextCursor: string | null
   data: UserNotification[]
 }
@@ -22,10 +23,6 @@ export type ListUserNotificationsParams = {
 
 export function listUserNotifications(params?: ListUserNotificationsParams, signal?: AbortSignal) {
   return client.get('/user/notifications', params, { signal }) as Promise<UserNotifications>
-}
-
-export function getUserNotificationStatus(signal?: AbortSignal) {
-  return client.get('/user/notifications/status', undefined, { signal }) as Promise<{ hasUnread: boolean }>
 }
 
 export function markUserNotificationRead(notificationID: string, signal?: AbortSignal) {

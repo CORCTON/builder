@@ -1,25 +1,17 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { client } from './common'
-import { getUserNotificationStatus, listUserNotifications, markUserNotificationRead } from './notification'
+import { listUserNotifications, markUserNotificationRead } from './notification'
 
 afterEach(() => vi.restoreAllMocks())
 
 describe('notification APIs', () => {
   it('lists authenticated user notifications with pagination', async () => {
-    const response = { nextCursor: null, data: [] }
+    const response = { hasUnread: false, nextCursor: null, data: [] }
     const get = vi.spyOn(client, 'get').mockResolvedValue(response)
 
     const params = { pageSize: 50, cursor: 'next-page' }
     await expect(listUserNotifications(params)).resolves.toBe(response)
     expect(get).toHaveBeenCalledWith('/user/notifications', params, { signal: undefined })
-  })
-
-  it('gets the notification status', async () => {
-    const response = { hasUnread: true }
-    const get = vi.spyOn(client, 'get').mockResolvedValue(response)
-
-    await expect(getUserNotificationStatus()).resolves.toBe(response)
-    expect(get).toHaveBeenCalledWith('/user/notifications/status', undefined, { signal: undefined })
   })
 
   it('marks a notification as read', async () => {

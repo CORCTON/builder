@@ -3,7 +3,7 @@ import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 
 import * as notificationApis from '@/apis/notification'
-import { capture, useMessageHandle } from '@/utils/exception'
+import { useMessageHandle } from '@/utils/exception'
 import { useI18n } from '@/utils/i18n'
 import { useSignedInUser } from '@/stores/user'
 import { UIButton, UIIcon, UIModal } from '@/components/ui'
@@ -36,27 +36,10 @@ const notificationRadar = computed(() => ({
 }))
 
 let listRequest: AbortController | null = null
-let statusRequest: AbortController | null = null
 const readRequests = new Map<string, AbortController>()
 
-async function refreshNotificationStatus() {
-  if (signedInUser.value == null || readRequests.size > 0) return
-  statusRequest?.abort()
-  const request = new AbortController()
-  statusRequest = request
-  try {
-    const result = await notificationApis.getUserNotificationStatus(request.signal)
-    request.signal.throwIfAborted()
-    hasUnread.value = result.hasUnread
-  } catch (error) {
-    if (!request.signal.aborted) capture(error, 'Failed to refresh notification status')
-  } finally {
-    if (statusRequest === request) statusRequest = null
-  }
-}
-
 async function loadNotifications(reset: boolean) {
-  if (signedInUser.value == null || (loading.value && !reset)) return
+  if (signedInUser.value == null || readRequests.size > 0 || (loading.value && !reset)) return
   if (reset) listRequest?.abort()
   const cursor = reset ? undefined : nextCursor.value ?? undefined
   if (!reset && cursor == null) return
@@ -70,6 +53,7 @@ async function loadNotifications(reset: boolean) {
     )
     request.signal.throwIfAborted()
     notifications.value = reset ? result.data : [...notifications.value, ...result.data]
+    hasUnread.value = result.hasUnread
     nextCursor.value = result.nextCursor
   } catch (error) {
     if (!request.signal.aborted) throw error
@@ -89,7 +73,6 @@ const handleLoadNotifications = useMessageHandle(loadNotifications, {
 function openNotificationCenter() {
   selectedNotificationID.value = null
   visible.value = true
-  refreshNotificationStatus()
   handleLoadNotifications(true)
 }
 
@@ -98,7 +81,6 @@ const handleOpenNotification = useMessageHandle(
     selectedNotificationID.value = notification.id
     if (notification.readAt != null || readRequests.has(notification.id)) return
 
-    statusRequest?.abort()
     const request = new AbortController()
     readRequests.set(notification.id, request)
     markingReadNotificationIDs.value.add(notification.id)
@@ -109,6 +91,10 @@ const handleOpenNotification = useMessageHandle(
       const currentNotification = notifications.value.find((item) => item.id === notification.id) ?? null
       if (currentNotification != null && currentNotification.readAt == null && updated.readAt != null) {
         currentNotification.readAt = updated.readAt
+        const lastNotification = notifications.value[notifications.value.length - 1] ?? null
+        hasUnread.value =
+          notifications.value.some((item) => item.readAt == null) ||
+          (nextCursor.value != null && lastNotification?.readAt == null)
       }
     } catch (error) {
       if (!request.signal.aborted) throw error
@@ -116,7 +102,6 @@ const handleOpenNotification = useMessageHandle(
       if (readRequests.get(notification.id) === request) {
         readRequests.delete(notification.id)
         markingReadNotificationIDs.value.delete(notification.id)
-        if (readRequests.size === 0) refreshNotificationStatus()
       }
     }
   },
@@ -154,17 +139,15 @@ function formatTime(value: string) {
 }
 
 function refreshWhenVisible() {
-  if (document.visibilityState === 'visible') refreshNotificationStatus()
+  if (document.visibilityState === 'visible') handleLoadNotifications(true)
 }
 
 watch(
   () => signedInUser.value?.id ?? null,
   (userID) => {
     listRequest?.abort()
-    statusRequest?.abort()
     for (const request of readRequests.values()) request.abort()
     listRequest = null
-    statusRequest = null
     readRequests.clear()
     markingReadNotificationIDs.value.clear()
     notifications.value = []
@@ -173,7 +156,7 @@ watch(
     nextCursor.value = null
     selectedNotificationID.value = null
     visible.value = false
-    if (userID != null) refreshNotificationStatus()
+    if (userID != null) handleLoadNotifications(true)
   },
   { immediate: true }
 )
@@ -183,7 +166,6 @@ onMounted(() => {
 })
 onUnmounted(() => {
   listRequest?.abort()
-  statusRequest?.abort()
   for (const request of readRequests.values()) request.abort()
   document.removeEventListener('visibilitychange', refreshWhenVisible)
 })

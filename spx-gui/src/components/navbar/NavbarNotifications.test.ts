@@ -9,7 +9,6 @@ const mocks = vi.hoisted(() => ({
   useSignedInUser: vi.fn(),
   push: vi.fn(),
   list: vi.fn(),
-  status: vi.fn(),
   markRead: vi.fn()
 }))
 
@@ -17,7 +16,6 @@ vi.mock('@/stores/user', () => ({ useSignedInUser: mocks.useSignedInUser }))
 vi.mock('vue-router', () => ({ useRouter: () => ({ push: mocks.push }) }))
 vi.mock('@/apis/notification', () => ({
   listUserNotifications: mocks.list,
-  getUserNotificationStatus: mocks.status,
   markUserNotificationRead: mocks.markRead
 }))
 vi.mock('@/utils/exception', async (importOriginal) => {
@@ -99,56 +97,59 @@ describe('NavbarNotifications', () => {
     await flushPromises()
 
     expect(wrapper.find('button').exists()).toBe(false)
-    expect(mocks.status).not.toHaveBeenCalled()
+    expect(mocks.list).not.toHaveBeenCalled()
   })
 
-  it('refreshes the unread count when opened and when the page becomes visible', async () => {
+  it('refreshes notifications when opened and when the page becomes visible', async () => {
     mocks.useSignedInUser.mockReturnValue(ref({ id: 'user-1' }))
-    mocks.status.mockResolvedValue({ hasUnread: true })
+    mocks.list.mockResolvedValue({ hasUnread: true, nextCursor: null, data: [] })
 
     const wrapper = mountNotifications()
     await flushPromises()
-    expect(mocks.status).toHaveBeenCalledTimes(1)
+    expect(mocks.list).toHaveBeenCalledTimes(1)
 
     await wrapper.get('[aria-label="Notifications, unread notifications available"]').trigger('click')
     await flushPromises()
-    expect(mocks.status).toHaveBeenCalledTimes(2)
+    expect(mocks.list).toHaveBeenCalledTimes(2)
 
     Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'visible' })
     document.dispatchEvent(new Event('visibilitychange'))
     await flushPromises()
-    expect(mocks.status).toHaveBeenCalledTimes(3)
+    expect(mocks.list).toHaveBeenCalledTimes(3)
   })
 
   it('loads pages, marks a notification read, and opens its application route', async () => {
     mocks.useSignedInUser.mockReturnValue(ref({ id: 'user-1' }))
-    mocks.status.mockResolvedValueOnce({ hasUnread: true }).mockResolvedValue({ hasUnread: false })
-    mocks.list.mockResolvedValueOnce({ nextCursor: 'next-page', data: [{ ...notification }] }).mockResolvedValueOnce({
-      nextCursor: null,
-      data: [
-        {
-          ...notification,
-          id: '10',
-          createdAt: '2026-08-25T06:02:00Z',
-          title: 'Earlier notification',
-          readAt: '2026-08-26T07:00:00Z'
-        }
-      ]
-    })
+    mocks.list
+      .mockResolvedValueOnce({ hasUnread: true, nextCursor: 'next-page', data: [{ ...notification }] })
+      .mockResolvedValueOnce({ hasUnread: true, nextCursor: 'next-page', data: [{ ...notification }] })
+      .mockResolvedValueOnce({
+        hasUnread: true,
+        nextCursor: null,
+        data: [
+          {
+            ...notification,
+            id: '10',
+            createdAt: '2026-08-25T06:02:00Z',
+            title: 'Earlier notification',
+            readAt: '2026-08-26T07:00:00Z'
+          }
+        ]
+      })
     mocks.markRead.mockResolvedValue({ ...notification, readAt: '2026-08-26T07:01:00Z' })
 
     const wrapper = mountNotifications()
     await flushPromises()
     await wrapper.get('[aria-label="Notifications, unread notifications available"]').trigger('click')
     await flushPromises()
-    expect(mocks.list).toHaveBeenNthCalledWith(1, { pageSize: 50 }, expect.any(AbortSignal))
+    expect(mocks.list).toHaveBeenNthCalledWith(2, { pageSize: 50 }, expect.any(AbortSignal))
 
     const loadMoreButton = wrapper.findAll('button').find((button) => button.text().includes('Load more'))
     expect(loadMoreButton).toBeDefined()
     await loadMoreButton!.trigger('click')
     await flushPromises()
     expect(mocks.list).toHaveBeenNthCalledWith(
-      2,
+      3,
       {
         pageSize: 50,
         cursor: 'next-page'
@@ -171,13 +172,14 @@ describe('NavbarNotifications', () => {
 
   it('does not overwrite a completed read with a stale cursor page response', async () => {
     mocks.useSignedInUser.mockReturnValue(ref({ id: 'user-1' }))
-    mocks.status.mockResolvedValue({ hasUnread: true })
     const pendingPage = deferred<{
+      hasUnread: boolean
       nextCursor: string | null
       data: (typeof notification)[]
     }>()
     mocks.list
-      .mockResolvedValueOnce({ nextCursor: 'next-page', data: [{ ...notification }] })
+      .mockResolvedValueOnce({ hasUnread: true, nextCursor: 'next-page', data: [{ ...notification }] })
+      .mockResolvedValueOnce({ hasUnread: true, nextCursor: 'next-page', data: [{ ...notification }] })
       .mockReturnValueOnce(pendingPage.promise)
     mocks.markRead.mockResolvedValue({ ...notification, readAt: '2026-08-26T07:01:00Z' })
 
@@ -191,21 +193,16 @@ describe('NavbarNotifications', () => {
     const notificationButton = wrapper.findAll('button').find((button) => button.text().includes(notification.title))
     await notificationButton!.trigger('click')
     await flushPromises()
-    expect(wrapper.get('[aria-label="Notifications, unread notifications available"]').find('.absolute').exists()).toBe(
-      true
-    )
+    expect(wrapper.get('[aria-label="Notifications"]').find('.absolute').exists()).toBe(false)
 
-    pendingPage.resolve({ nextCursor: null, data: [] })
+    pendingPage.resolve({ hasUnread: true, nextCursor: null, data: [] })
     await flushPromises()
-    expect(wrapper.get('[aria-label="Notifications, unread notifications available"]').find('.absolute').exists()).toBe(
-      true
-    )
+    expect(wrapper.get('[aria-label="Notifications"]').find('.absolute').exists()).toBe(false)
   })
 
-  it('waits for mark-as-read and defers count refresh while the request is pending', async () => {
+  it('waits for mark-as-read and defers list refresh while the request is pending', async () => {
     mocks.useSignedInUser.mockReturnValue(ref({ id: 'user-1' }))
-    mocks.status.mockResolvedValue({ hasUnread: true })
-    mocks.list.mockResolvedValue({ nextCursor: null, data: [{ ...notification }] })
+    mocks.list.mockResolvedValue({ hasUnread: true, nextCursor: null, data: [{ ...notification }] })
     const pendingRead = deferred<typeof notification>()
     mocks.markRead.mockReturnValue(pendingRead.promise)
 
@@ -222,21 +219,22 @@ describe('NavbarNotifications', () => {
     Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'visible' })
     document.dispatchEvent(new Event('visibilitychange'))
     await flushPromises()
-    expect(mocks.status).toHaveBeenCalledTimes(2)
+    expect(mocks.list).toHaveBeenCalledTimes(2)
 
     pendingRead.resolve({ ...notification, readAt: '2026-08-26T07:01:00Z' })
     await flushPromises()
-    expect(mocks.status).toHaveBeenCalledTimes(3)
-    expect(wrapper.get('[aria-label="Notifications, unread notifications available"]').find('.absolute').exists()).toBe(
-      true
-    )
+    expect(mocks.list).toHaveBeenCalledTimes(2)
+    expect(wrapper.get('[aria-label="Notifications"]').find('.absolute').exists()).toBe(false)
   })
 
   it('marks different notifications as read concurrently', async () => {
     const anotherNotification = { ...notification, id: '12', title: 'Another notification' }
     mocks.useSignedInUser.mockReturnValue(ref({ id: 'user-1' }))
-    mocks.status.mockResolvedValue({ hasUnread: true })
-    mocks.list.mockResolvedValue({ nextCursor: null, data: [{ ...notification }, anotherNotification] })
+    mocks.list.mockResolvedValue({
+      hasUnread: true,
+      nextCursor: null,
+      data: [{ ...notification }, anotherNotification]
+    })
     const firstRead = deferred<typeof notification>()
     const secondRead = deferred<typeof notification>()
     mocks.markRead.mockReturnValueOnce(firstRead.promise).mockReturnValueOnce(secondRead.promise)
@@ -266,12 +264,16 @@ describe('NavbarNotifications', () => {
 
   it('restarts the first page when reopened during an in-flight page request', async () => {
     mocks.useSignedInUser.mockReturnValue(ref({ id: 'user-1' }))
-    mocks.status.mockResolvedValue({ hasUnread: false })
-    const pendingPage = deferred<{ nextCursor: string | null; data: UserNotification[] }>()
+    const pendingPage = deferred<{ hasUnread: boolean; nextCursor: string | null; data: UserNotification[] }>()
     mocks.list
-      .mockResolvedValueOnce({ nextCursor: 'next-page', data: [{ ...notification }] })
+      .mockResolvedValueOnce({ hasUnread: false, nextCursor: 'next-page', data: [{ ...notification }] })
+      .mockResolvedValueOnce({ hasUnread: false, nextCursor: 'next-page', data: [{ ...notification }] })
       .mockReturnValueOnce(pendingPage.promise)
-      .mockResolvedValueOnce({ nextCursor: null, data: [{ ...notification, title: 'Refreshed notification' }] })
+      .mockResolvedValueOnce({
+        hasUnread: false,
+        nextCursor: null,
+        data: [{ ...notification, title: 'Refreshed notification' }]
+      })
 
     const wrapper = mountNotifications()
     await flushPromises()
@@ -281,21 +283,21 @@ describe('NavbarNotifications', () => {
       .findAll('button')
       .find((button) => button.text().includes('Load more'))!
       .trigger('click')
-    const pageSignal = mocks.list.mock.calls[1][1] as AbortSignal
+    const pageSignal = mocks.list.mock.calls[2][1] as AbortSignal
 
     await wrapper.get('[aria-label="Close notifications"]').trigger('click')
     await wrapper.get('[aria-label="Notifications"]').trigger('click')
     await flushPromises()
 
     expect(pageSignal.aborted).toBe(true)
-    expect(mocks.list).toHaveBeenCalledTimes(3)
+    expect(mocks.list).toHaveBeenCalledTimes(4)
     expect(wrapper.text()).toContain('Refreshed notification')
   })
 
   it('does not open an unsafe notification action', async () => {
     mocks.useSignedInUser.mockReturnValue(ref({ id: 'user-1' }))
-    mocks.status.mockResolvedValue({ hasUnread: false })
     mocks.list.mockResolvedValue({
+      hasUnread: false,
       nextCursor: null,
       data: [{ ...notification, actionPath: `/\\example.com`, readAt: '2026-08-26T07:00:00Z' }]
     })
@@ -317,11 +319,10 @@ describe('NavbarNotifications', () => {
     const user = ref<{ id: string } | null>({ id: 'user-1' })
     const pendingRead = deferred<typeof notification>()
     mocks.useSignedInUser.mockReturnValue(user)
-    mocks.status
-      .mockResolvedValueOnce({ hasUnread: true })
-      .mockResolvedValueOnce({ hasUnread: true })
-      .mockResolvedValueOnce({ hasUnread: false })
-    mocks.list.mockResolvedValue({ nextCursor: null, data: [{ ...notification }] })
+    mocks.list
+      .mockResolvedValueOnce({ hasUnread: true, nextCursor: null, data: [{ ...notification }] })
+      .mockResolvedValueOnce({ hasUnread: true, nextCursor: null, data: [{ ...notification }] })
+      .mockResolvedValueOnce({ hasUnread: false, nextCursor: null, data: [] })
     mocks.markRead.mockReturnValue(pendingRead.promise)
 
     const wrapper = mountNotifications()

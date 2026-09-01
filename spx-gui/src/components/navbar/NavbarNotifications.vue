@@ -119,7 +119,6 @@ const handleOpenNotification = useMessageHandle(
       const currentNotification = notifications.value.find((item) => item.id === notification.id) ?? null
       if (currentNotification != null && currentNotification.readAt == null && updated.readAt != null) {
         currentNotification.readAt = updated.readAt
-        notifications.value.sort(compareNotifications)
         const lastNotification = notifications.value[notifications.value.length - 1] ?? null
         hasUnread.value =
           notifications.value.some((item) => item.readAt == null) ||
@@ -144,14 +143,6 @@ const handleOpenNotification = useMessageHandle(
 
 function backToList() {
   selectedNotificationID.value = null
-}
-
-function compareNotifications(left: notificationApis.UserNotification, right: notificationApis.UserNotification) {
-  const readOrder = Number(left.readAt != null) - Number(right.readAt != null)
-  if (readOrder !== 0) return readOrder
-  const createdAtOrder = Date.parse(right.createdAt) - Date.parse(left.createdAt)
-  if (createdAtOrder !== 0) return createdAtOrder
-  return right.id.length - left.id.length || right.id.localeCompare(left.id)
 }
 
 function isValidActionPath(value: string) {

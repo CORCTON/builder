@@ -320,25 +320,18 @@ describe('NavbarNotifications', () => {
     expect(wrapper.text()).toContain('No notifications')
   })
 
-  it('moves a newly read notification behind every unread notification', async () => {
+  it('keeps a notification in place after marking it as read', async () => {
     const olderUnread = {
       ...notification,
       id: '10',
       createdAt: '2026-08-25T06:02:00Z',
       title: 'Older unread notification'
     }
-    const olderRead = {
-      ...notification,
-      id: '9',
-      createdAt: '2026-08-24T06:02:00Z',
-      title: 'Older read notification',
-      readAt: '2026-08-25T07:00:00Z'
-    }
     mocks.useSignedInUser.mockReturnValue(ref({ id: 'user-1' }))
     mocks.list.mockResolvedValue({
       hasUnread: true,
       nextCursor: null,
-      data: [{ ...notification }, olderUnread, olderRead]
+      data: [{ ...notification }, olderUnread]
     })
     mocks.markRead.mockResolvedValue({ ...notification, readAt: '2026-08-26T07:01:00Z' })
 
@@ -353,13 +346,11 @@ describe('NavbarNotifications', () => {
     await flushPromises()
     await wrapper.get('[aria-label="Back to notifications"]').trigger('click')
 
-    const titles = wrapper
-      .findAll('button')
-      .filter((button) => button.find('time').exists())
-      .map((button) => button.text())
-    expect(titles[0]).toContain(olderUnread.title)
-    expect(titles[1]).toContain(notification.title)
-    expect(titles[2]).toContain(olderRead.title)
+    const rows = wrapper.findAll('button').filter((button) => button.find('time').exists())
+    expect(rows[0].text()).toContain(notification.title)
+    expect(rows[0].find('.bg-primary-main').exists()).toBe(false)
+    expect(rows[1].text()).toContain(olderUnread.title)
+    expect(rows[1].find('.bg-primary-main').exists()).toBe(true)
   })
 
   it('marks different notifications as read concurrently', async () => {

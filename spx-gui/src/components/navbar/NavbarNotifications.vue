@@ -36,34 +36,22 @@ const notificationRadar = computed(() => ({
 }))
 
 let listRequest: AbortController | null = null
-let listRequestReset: boolean | null = null
-let queuedListRequestReset: boolean | null = null
 const readRequests = new Map<string, AbortController>()
-
-function queueListRequest(reset: boolean) {
-  queuedListRequestReset = queuedListRequestReset == null ? reset : queuedListRequestReset || reset
-}
 
 function abortListRequest() {
   listRequest?.abort()
   listRequest = null
-  listRequestReset = null
   loading.value = false
 }
 
 async function loadNotifications(reset: boolean) {
   if (signedInUser.value == null) return
-  if (readRequests.size > 0) {
-    queueListRequest(reset)
-    return
-  }
   if (loading.value && !reset) return
   if (reset) abortListRequest()
   const cursor = reset ? undefined : nextCursor.value ?? undefined
   if (!reset && cursor == null) return
   const request = new AbortController()
   listRequest = request
-  listRequestReset = reset
   loading.value = true
   try {
     const result = await notificationApis.listUserNotifications(
@@ -84,7 +72,6 @@ async function loadNotifications(reset: boolean) {
   } finally {
     if (listRequest === request) {
       listRequest = null
-      listRequestReset = null
       loading.value = false
     }
   }
@@ -106,10 +93,7 @@ const handleOpenNotification = useMessageHandle(
     selectedNotificationID.value = notification.id
     if (notification.readAt != null || readRequests.has(notification.id)) return
 
-    if (listRequest != null) {
-      queueListRequest(listRequestReset ?? true)
-      abortListRequest()
-    }
+    abortListRequest()
     const request = new AbortController()
     readRequests.set(notification.id, request)
     markingReadNotificationIDs.value.add(notification.id)
@@ -130,11 +114,6 @@ const handleOpenNotification = useMessageHandle(
       if (readRequests.get(notification.id) === request) {
         readRequests.delete(notification.id)
         markingReadNotificationIDs.value.delete(notification.id)
-        if (readRequests.size === 0 && queuedListRequestReset != null) {
-          const reset = queuedListRequestReset
-          queuedListRequestReset = null
-          handleLoadNotifications(reset)
-        }
       }
     }
   },
@@ -176,7 +155,6 @@ watch(
   (userID) => {
     abortListRequest()
     for (const request of readRequests.values()) request.abort()
-    queuedListRequestReset = null
     readRequests.clear()
     markingReadNotificationIDs.value.clear()
     notifications.value = []
@@ -191,7 +169,6 @@ watch(
 
 onUnmounted(() => {
   abortListRequest()
-  queuedListRequestReset = null
   for (const request of readRequests.values()) request.abort()
 })
 </script>
@@ -308,7 +285,12 @@ onUnmounted(() => {
             </div>
           </button>
           <div v-if="nextCursor != null" class="border-t border-grey-300 p-3 text-center">
-            <UIButton type="white" size="small" :loading="loading" @click="handleLoadNotifications(false)">
+            <UIButton
+              type="white"
+              size="small"
+              :loading="loading || markingReadNotificationIDs.size > 0"
+              @click="handleLoadNotifications(false)"
+            >
               {{ $t({ en: 'Load more', zh: '加载更多' }) }}
             </UIButton>
           </div>

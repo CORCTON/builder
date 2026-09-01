@@ -88,37 +88,34 @@ function openNotificationCenter() {
   handleLoadNotifications(true)
 }
 
-const handleOpenNotification = useMessageHandle(
-  async (notification: notificationApis.UserNotification) => {
-    selectedNotificationID.value = notification.id
-    if (notification.readAt != null || readRequests.has(notification.id)) return
+async function handleOpenNotification(notification: notificationApis.UserNotification) {
+  selectedNotificationID.value = notification.id
+  if (notification.readAt != null || readRequests.has(notification.id)) return
 
-    abortListRequest()
-    const request = new AbortController()
-    readRequests.set(notification.id, request)
-    markingReadNotificationIDs.value.add(notification.id)
-    try {
-      const updated = await notificationApis.markUserNotificationRead(notification.id, request.signal)
-      request.signal.throwIfAborted()
-      const currentNotification = notifications.value.find((item) => item.id === notification.id) ?? null
-      if (currentNotification != null && currentNotification.readAt == null && updated.readAt != null) {
-        currentNotification.readAt = updated.readAt
-        const lastNotification = notifications.value[notifications.value.length - 1] ?? null
-        hasUnread.value =
-          notifications.value.some((item) => item.readAt == null) ||
-          (nextCursor.value != null && lastNotification?.readAt == null)
-      }
-    } catch (error) {
-      if (!request.signal.aborted) throw error
-    } finally {
-      if (readRequests.get(notification.id) === request) {
-        readRequests.delete(notification.id)
-        markingReadNotificationIDs.value.delete(notification.id)
-      }
+  abortListRequest()
+  const request = new AbortController()
+  readRequests.set(notification.id, request)
+  markingReadNotificationIDs.value.add(notification.id)
+  try {
+    const updated = await notificationApis.markUserNotificationRead(notification.id, request.signal)
+    request.signal.throwIfAborted()
+    const currentNotification = notifications.value.find((item) => item.id === notification.id) ?? null
+    if (currentNotification != null && currentNotification.readAt == null && updated.readAt != null) {
+      currentNotification.readAt = updated.readAt
+      const lastNotification = notifications.value[notifications.value.length - 1] ?? null
+      hasUnread.value =
+        notifications.value.some((item) => item.readAt == null) ||
+        (nextCursor.value != null && lastNotification?.readAt == null)
     }
-  },
-  { en: 'Failed to mark notification as read', zh: '通知标记已读失败' }
-).fn
+  } catch {
+    // Reading the notification succeeded; keep it unread so a later interaction can retry.
+  } finally {
+    if (readRequests.get(notification.id) === request) {
+      readRequests.delete(notification.id)
+      markingReadNotificationIDs.value.delete(notification.id)
+    }
+  }
+}
 
 function backToList() {
   selectedNotificationID.value = null

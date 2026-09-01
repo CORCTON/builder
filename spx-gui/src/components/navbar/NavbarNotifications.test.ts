@@ -272,6 +272,38 @@ describe('NavbarNotifications', () => {
     ).toBe(undefined)
   })
 
+  it('silently keeps a notification unread and retryable when marking it read fails', async () => {
+    mocks.useSignedInUser.mockReturnValue(ref({ id: 'user-1' }))
+    mocks.list.mockResolvedValue({ hasUnread: true, nextCursor: null, data: [{ ...notification }] })
+    mocks.markRead.mockRejectedValueOnce(new Error('network error')).mockResolvedValueOnce({
+      ...notification,
+      readAt: '2026-08-26T07:01:00Z'
+    })
+
+    const wrapper = mountNotifications()
+    await flushPromises()
+    await wrapper.get('[aria-label="Notifications, unread notifications available"]').trigger('click')
+    await flushPromises()
+    await wrapper
+      .findAll('button')
+      .find((button) => button.text().includes(notification.title))!
+      .trigger('click')
+    await flushPromises()
+
+    expect(wrapper.get('[aria-label="Notifications, unread notifications available"]').find('.absolute').exists()).toBe(
+      true
+    )
+
+    await wrapper.get('[aria-label="Back to notifications"]').trigger('click')
+    await wrapper
+      .findAll('button')
+      .find((button) => button.text().includes(notification.title))!
+      .trigger('click')
+    await flushPromises()
+
+    expect(mocks.markRead).toHaveBeenCalledTimes(2)
+  })
+
   it('keeps a notification in place after marking it as read', async () => {
     const olderUnread = {
       ...notification,

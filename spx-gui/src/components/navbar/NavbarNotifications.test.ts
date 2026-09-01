@@ -100,7 +100,7 @@ describe('NavbarNotifications', () => {
     expect(mocks.list).not.toHaveBeenCalled()
   })
 
-  it('refreshes notifications when opened and when the page becomes visible', async () => {
+  it('refreshes notifications when opened', async () => {
     mocks.useSignedInUser.mockReturnValue(ref({ id: 'user-1' }))
     mocks.list.mockResolvedValue({ hasUnread: true, nextCursor: null, data: [] })
 
@@ -111,11 +111,6 @@ describe('NavbarNotifications', () => {
     await wrapper.get('[aria-label="Notifications, unread notifications available"]').trigger('click')
     await flushPromises()
     expect(mocks.list).toHaveBeenCalledTimes(2)
-
-    Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'visible' })
-    document.dispatchEvent(new Event('visibilitychange'))
-    await flushPromises()
-    expect(mocks.list).toHaveBeenCalledTimes(3)
   })
 
   it('loads pages, marks a notification read, and opens its application route', async () => {
@@ -241,7 +236,7 @@ describe('NavbarNotifications', () => {
     expect(wrapper.text()).toContain(earlierNotification.title)
   })
 
-  it('waits for mark-as-read and defers list refresh while the request is pending', async () => {
+  it('waits for mark-as-read before clearing the unread indicator', async () => {
     mocks.useSignedInUser.mockReturnValue(ref({ id: 'user-1' }))
     mocks.list.mockResolvedValue({ hasUnread: true, nextCursor: null, data: [{ ...notification }] })
     const pendingRead = deferred<typeof notification>()
@@ -257,14 +252,8 @@ describe('NavbarNotifications', () => {
     expect(wrapper.get('[aria-label="Notifications, unread notifications available"]').find('.absolute').exists()).toBe(
       true
     )
-    Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'visible' })
-    document.dispatchEvent(new Event('visibilitychange'))
-    await flushPromises()
-    expect(mocks.list).toHaveBeenCalledTimes(2)
-
     pendingRead.resolve({ ...notification, readAt: '2026-08-26T07:01:00Z' })
     await flushPromises()
-    expect(mocks.list).toHaveBeenCalledTimes(2)
     expect(wrapper.get('[aria-label="Notifications"]').find('.absolute').exists()).toBe(false)
   })
 

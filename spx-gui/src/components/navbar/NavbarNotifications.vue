@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, onUnmounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 
 import * as notificationApis from '@/apis/notification'
@@ -143,10 +143,6 @@ function formatTime(value: string) {
   return dateTimeFormatter.value.format(new Date(value))
 }
 
-function refreshWhenVisible() {
-  if (document.visibilityState === 'visible') handleLoadNotifications(true)
-}
-
 watch(
   () => signedInUser.value?.id ?? null,
   (userID) => {
@@ -166,13 +162,9 @@ watch(
   { immediate: true }
 )
 
-onMounted(() => {
-  document.addEventListener('visibilitychange', refreshWhenVisible)
-})
 onUnmounted(() => {
   listRequest?.abort()
   for (const request of readRequests.values()) request.abort()
-  document.removeEventListener('visibilitychange', refreshWhenVisible)
 })
 </script>
 

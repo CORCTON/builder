@@ -36,15 +36,34 @@ const notificationRadar = computed(() => ({
 }))
 
 let listRequest: AbortController | null = null
+let listRequestReset: boolean | null = null
+let queuedListRequestReset: boolean | null = null
 const readRequests = new Map<string, AbortController>()
 
+function queueListRequest(reset: boolean) {
+  queuedListRequestReset = queuedListRequestReset == null ? reset : queuedListRequestReset || reset
+}
+
+function abortListRequest() {
+  listRequest?.abort()
+  listRequest = null
+  listRequestReset = null
+  loading.value = false
+}
+
 async function loadNotifications(reset: boolean) {
-  if (signedInUser.value == null || readRequests.size > 0 || (loading.value && !reset)) return
-  if (reset) listRequest?.abort()
+  if (signedInUser.value == null) return
+  if (readRequests.size > 0) {
+    queueListRequest(reset)
+    return
+  }
+  if (loading.value && !reset) return
+  if (reset) abortListRequest()
   const cursor = reset ? undefined : nextCursor.value ?? undefined
   if (!reset && cursor == null) return
   const request = new AbortController()
   listRequest = request
+  listRequestReset = reset
   loading.value = true
   try {
     const result = await notificationApis.listUserNotifications(
@@ -65,6 +84,7 @@ async function loadNotifications(reset: boolean) {
   } finally {
     if (listRequest === request) {
       listRequest = null
+      listRequestReset = null
       loading.value = false
     }
   }
@@ -86,7 +106,10 @@ const handleOpenNotification = useMessageHandle(
     selectedNotificationID.value = notification.id
     if (notification.readAt != null || readRequests.has(notification.id)) return
 
-    listRequest?.abort()
+    if (listRequest != null) {
+      queueListRequest(listRequestReset ?? true)
+      abortListRequest()
+    }
     const request = new AbortController()
     readRequests.set(notification.id, request)
     markingReadNotificationIDs.value.add(notification.id)
@@ -96,6 +119,7 @@ const handleOpenNotification = useMessageHandle(
       const currentNotification = notifications.value.find((item) => item.id === notification.id) ?? null
       if (currentNotification != null && currentNotification.readAt == null && updated.readAt != null) {
         currentNotification.readAt = updated.readAt
+        notifications.value.sort(compareNotifications)
         const lastNotification = notifications.value[notifications.value.length - 1] ?? null
         hasUnread.value =
           notifications.value.some((item) => item.readAt == null) ||
@@ -107,6 +131,11 @@ const handleOpenNotification = useMessageHandle(
       if (readRequests.get(notification.id) === request) {
         readRequests.delete(notification.id)
         markingReadNotificationIDs.value.delete(notification.id)
+        if (readRequests.size === 0 && queuedListRequestReset != null) {
+          const reset = queuedListRequestReset
+          queuedListRequestReset = null
+          handleLoadNotifications(reset)
+        }
       }
     }
   },
@@ -115,6 +144,14 @@ const handleOpenNotification = useMessageHandle(
 
 function backToList() {
   selectedNotificationID.value = null
+}
+
+function compareNotifications(left: notificationApis.UserNotification, right: notificationApis.UserNotification) {
+  const readOrder = Number(left.readAt != null) - Number(right.readAt != null)
+  if (readOrder !== 0) return readOrder
+  const createdAtOrder = Date.parse(right.createdAt) - Date.parse(left.createdAt)
+  if (createdAtOrder !== 0) return createdAtOrder
+  return right.id.length - left.id.length || right.id.localeCompare(left.id)
 }
 
 function isValidActionPath(value: string) {
@@ -146,14 +183,13 @@ function formatTime(value: string) {
 watch(
   () => signedInUser.value?.id ?? null,
   (userID) => {
-    listRequest?.abort()
+    abortListRequest()
     for (const request of readRequests.values()) request.abort()
-    listRequest = null
+    queuedListRequestReset = null
     readRequests.clear()
     markingReadNotificationIDs.value.clear()
     notifications.value = []
     hasUnread.value = false
-    loading.value = false
     nextCursor.value = null
     selectedNotificationID.value = null
     visible.value = false
@@ -163,7 +199,8 @@ watch(
 )
 
 onUnmounted(() => {
-  listRequest?.abort()
+  abortListRequest()
+  queuedListRequestReset = null
   for (const request of readRequests.values()) request.abort()
 })
 </script>

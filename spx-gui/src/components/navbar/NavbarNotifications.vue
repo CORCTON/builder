@@ -125,7 +125,12 @@ function backToList() {
 }
 
 function isValidActionPath(value: string) {
-  return value.startsWith('/') && !value.startsWith('//') && !value.includes('\\')
+  if (!value.startsWith('/') || value.startsWith('//') || value.includes('\\')) return false
+  for (const char of value) {
+    const codePoint = char.codePointAt(0) ?? 0
+    if (/\s/u.test(char) || codePoint <= 0x1f || (codePoint >= 0x7f && codePoint <= 0x9f)) return false
+  }
+  return true
 }
 
 async function openAction() {

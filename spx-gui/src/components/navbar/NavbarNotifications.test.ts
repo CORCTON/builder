@@ -368,12 +368,12 @@ describe('NavbarNotifications', () => {
     expect(wrapper.text()).toContain('Refreshed notification')
   })
 
-  it('does not open an unsafe notification action', async () => {
+  it.each([`/\\example.com`, '/\t/evil.com'])('does not open the unsafe notification action %j', async (actionPath) => {
     mocks.useSignedInUser.mockReturnValue(ref({ id: 'user-1' }))
     mocks.list.mockResolvedValue({
       hasUnread: false,
       nextCursor: null,
-      data: [{ ...notification, actionPath: `/\\example.com`, readAt: '2026-08-26T07:00:00Z' }]
+      data: [{ ...notification, actionPath, readAt: '2026-08-26T07:00:00Z' }]
     })
 
     const wrapper = mountNotifications()

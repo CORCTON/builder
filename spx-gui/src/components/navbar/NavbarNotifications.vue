@@ -298,12 +298,7 @@ onUnmounted(() => {
       </template>
 
       <article v-else class="max-h-[480px] overflow-y-auto px-5 py-5">
-        <div class="flex items-center gap-2 text-xs text-grey-800">
-          <time>{{ formatTime(selectedNotification.createdAt) }}</time>
-          <span v-if="markingReadNotificationIDs.has(selectedNotification.id)">
-            {{ $t({ en: 'Marking as read...', zh: '正在标记已读...' }) }}
-          </span>
-        </div>
+        <time class="text-xs text-grey-800">{{ formatTime(selectedNotification.createdAt) }}</time>
         <p class="mt-3 whitespace-pre-wrap text-sm leading-6 text-grey-1000">{{ selectedNotification.body }}</p>
         <UIButton v-if="selectedNotification.actionPath != null" class="mt-6" type="primary" @click="openAction">
           {{ $t({ en: 'View details', zh: '查看详情' }) }}

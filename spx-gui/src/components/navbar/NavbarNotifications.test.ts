@@ -333,11 +333,7 @@ describe('NavbarNotifications', () => {
 
     expect(mocks.markRead).toHaveBeenCalledTimes(2)
     expect((mocks.markRead.mock.calls[0][1] as AbortSignal).aborted).toBe(false)
-    expect(wrapper.text()).toContain('Marking as read...')
-
-    secondRead.resolve({ ...anotherNotification, readAt: '2026-08-26T07:01:00Z' })
-    await flushPromises()
-    expect(wrapper.text()).not.toContain('Marking as read...')
+    expect((mocks.markRead.mock.calls[1][1] as AbortSignal).aborted).toBe(false)
   })
 
   it('restarts the first page when reopened during an in-flight page request', async () => {

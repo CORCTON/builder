@@ -27,6 +27,7 @@ const isSubmitting = ref(false)
 const activeSubmission = ref<symbol | null>(null)
 const pendingCopilotFeedback = ref<PreparedFeedbackDraft | null>(null)
 const selectedNotificationID = ref<string | null>(null)
+const failedNotificationImageIDs = ref(new Set<string>())
 const notificationTitleID = useId()
 const selectedNotification = computed(
   () => model.data.notifications.find((notification) => notification.id === selectedNotificationID.value) ?? null
@@ -151,6 +152,10 @@ function openNotification(notification: InProductNotification) {
 
 function backToNotificationList() {
   selectedNotificationID.value = null
+}
+
+function handleNotificationImageError(id: string) {
+  failedNotificationImageIDs.value = new Set(failedNotificationImageIDs.value).add(id)
 }
 
 function formatTime(value: string) {
@@ -300,30 +305,60 @@ function formatAttachmentCount(count: number) {
         <p class="whitespace-pre-wrap text-sm leading-6 text-grey-1000">{{ selectedNotification.body }}</p>
 
         <section v-if="selectedNotification.attachments.length > 0" class="mt-6">
-          <h4 class="text-sm font-semibold text-title">{{ $t({ en: 'Attachments', zh: '附件' }) }}</h4>
-          <div class="mt-2 space-y-2">
-            <div
-              v-for="attachment in selectedNotification.attachments"
-              :key="attachment.id"
-              class="flex items-center gap-3 rounded-lg border border-grey-400 bg-grey-100 px-3 py-3"
-            >
-              <span class="flex size-9 shrink-0 items-center justify-center rounded-md bg-grey-300 text-grey-900">
-                <UIIcon type="file" class="size-4" />
-              </span>
-              <div class="min-w-0">
-                <a
-                  v-if="attachment.url != null"
-                  class="block truncate text-sm font-medium text-title hover:text-primary-main"
-                  :href="attachment.url"
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  {{ attachment.name }}
-                </a>
-                <p v-else class="truncate text-sm font-medium text-title">{{ attachment.name }}</p>
-                <p class="mt-0.5 text-xs text-grey-800">{{ formatFileSize(attachment.size) }}</p>
+          <h4 class="text-sm font-semibold text-title">{{ $t({ en: 'Images', zh: '图片' }) }}</h4>
+          <div class="mt-2 grid gap-3">
+            <template v-for="attachment in selectedNotification.attachments" :key="attachment.id">
+              <a
+                v-if="attachment.url != null && !failedNotificationImageIDs.has(attachment.id)"
+                v-radar="{
+                  name: $t({ en: 'Open image', zh: '查看大图' }),
+                  desc: attachment.name
+                }"
+                class="group block overflow-hidden rounded-lg border border-grey-400 bg-grey-100 no-underline transition-colors hover:border-primary-main hover:bg-primary-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-main active:bg-primary-200"
+                :href="attachment.url"
+                target="_blank"
+                rel="noreferrer"
+                :aria-label="
+                  $t({
+                    en: `Open ${attachment.name} full size in a new tab`,
+                    zh: `在新标签页查看大图：${attachment.name}`
+                  })
+                "
+              >
+                <div class="flex aspect-video items-center justify-center overflow-hidden bg-grey-200">
+                  <img
+                    class="h-full w-full object-contain"
+                    :src="attachment.url"
+                    alt=""
+                    @error="handleNotificationImageError(attachment.id)"
+                  />
+                </div>
+                <div class="flex min-h-11 items-center justify-between gap-3 px-3 py-2.5">
+                  <span class="min-w-0">
+                    <span class="block truncate text-sm font-medium text-title">{{ attachment.name }}</span>
+                    <span class="mt-0.5 block text-xs text-grey-800">{{ formatFileSize(attachment.size) }}</span>
+                  </span>
+                  <span class="flex shrink-0 items-center gap-1 text-xs font-medium text-primary-main">
+                    {{ $t({ en: 'View full size', zh: '查看大图' }) }}
+                    <UIIcon type="fullScreen" class="size-3.5" />
+                  </span>
+                </div>
+              </a>
+              <div
+                v-else
+                class="flex min-h-11 items-center gap-3 rounded-lg border border-grey-400 bg-grey-100 px-3 py-3"
+              >
+                <span class="flex size-9 shrink-0 items-center justify-center rounded-md bg-grey-300 text-grey-900">
+                  <UIIcon type="file" class="size-4" />
+                </span>
+                <span class="min-w-0">
+                  <span class="block truncate text-sm font-medium text-title">{{ attachment.name }}</span>
+                  <span class="mt-0.5 block text-xs text-grey-800">
+                    {{ $t({ en: 'Preview unavailable', zh: '图片暂时无法预览' }) }}
+                  </span>
+                </span>
               </div>
-            </div>
+            </template>
           </div>
         </section>
       </article>

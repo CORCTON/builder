@@ -1,10 +1,11 @@
 import type { FeedbackContext } from './context'
+import republishGuideURL from './assets/republish-guide.svg'
 
 export type FeedbackSource = 'globalForm'
 export type FeedbackStatus = 'new' | 'handled' | 'replied'
 export type { FeedbackContext } from './context'
 
-export const feedbackDemoMockVersion = 10
+export const feedbackDemoMockVersion = 11
 
 export interface FeedbackAttachment {
   id: string
@@ -164,7 +165,9 @@ const mockData: FeedbackDemoData = {
       createdAt: '2026-08-02T16:10:00+08:00',
       handledAt: null,
       reply: '发布页面的问题已经修复，请重新发布项目后再试一次。',
-      replyAttachments: [{ id: 'reply-attachment-1001-1', name: '重新发布项目.png', size: 248_832 }],
+      replyAttachments: [
+        { id: 'reply-attachment-1001-1', name: '重新发布项目指南.svg', size: 24_832, url: republishGuideURL }
+      ],
       repliedAt: '2026-08-02T16:32:00+08:00'
     }
   ],
@@ -175,7 +178,9 @@ const mockData: FeedbackDemoData = {
       feedbackID: 'feedback-1001',
       title: '支持团队回复了你的反馈',
       body: '发布页面的问题已经修复，请重新发布项目后再试一次。',
-      attachments: [{ id: 'reply-attachment-1001-1', name: '重新发布项目.png', size: 248_832 }],
+      attachments: [
+        { id: 'reply-attachment-1001-1', name: '重新发布项目指南.svg', size: 24_832, url: republishGuideURL }
+      ],
       createdAt: '2026-08-02T16:32:00+08:00',
       readAt: null
     }

@@ -106,18 +106,18 @@ describe('feedback demo model', () => {
     const initialUnreadCount = model.unreadNotificationCount.value
 
     model.replyToFeedback(newFeedback.id, '  We fixed this for you.  ', [
-      { id: 'reply-attachment', name: 'steps.pdf', size: 2048 }
+      { id: 'reply-attachment', name: 'steps.png', size: 2048 }
     ])
 
     expect(newFeedback).toMatchObject({
       status: 'replied',
       reply: 'We fixed this for you.',
-      replyAttachments: [{ id: 'reply-attachment', name: 'steps.pdf', size: 2048 }]
+      replyAttachments: [{ id: 'reply-attachment', name: 'steps.png', size: 2048 }]
     })
     expect(model.data.notifications[0]).toMatchObject({
       feedbackID: newFeedback.id,
       body: 'We fixed this for you.',
-      attachments: [{ id: 'reply-attachment', name: 'steps.pdf', size: 2048 }],
+      attachments: [{ id: 'reply-attachment', name: 'steps.png', size: 2048 }],
       readAt: null
     })
     expect(model.unreadNotificationCount.value).toBe(initialUnreadCount + 1)

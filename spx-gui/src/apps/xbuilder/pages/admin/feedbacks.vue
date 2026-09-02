@@ -71,9 +71,10 @@ function handleReplyFiles(event: Event) {
   const input = event.target as HTMLInputElement
   if (input.files == null) return
   const sequence = Date.now()
+  const images = Array.from(input.files).filter((file) => file.type.startsWith('image/'))
   replyAttachments.value = [
     ...replyAttachments.value,
-    ...Array.from(input.files).map((file, index) => ({
+    ...images.map((file, index) => ({
       id: `reply-attachment-${sequence}-${index}`,
       name: file.name,
       size: file.size,
@@ -492,13 +493,13 @@ function formatRuntimeTime(value: string) {
               class="inline-flex cursor-pointer items-center gap-2 rounded-md border border-dashed border-grey-500 bg-white px-3 py-2 text-xs text-grey-900 transition-colors hover:border-primary-main hover:bg-primary-100 focus-within:border-primary-main focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-primary-main"
             >
               <UIIcon type="localFile" class="size-3.5" />
-              {{ $t({ en: 'Attach files', zh: '添加附件' }) }}
+              {{ $t({ en: 'Attach images', zh: '添加图片' }) }}
               <input
-                v-radar="{ name: 'Reply attachments', desc: 'Choose optional files to send with the support reply' }"
+                v-radar="{ name: 'Reply images', desc: 'Choose optional images to send with the support reply' }"
                 class="sr-only"
                 type="file"
                 multiple
-                accept="image/*,.pdf,.txt,.log,.zip"
+                accept="image/*"
                 @change="handleReplyFiles"
               />
             </label>

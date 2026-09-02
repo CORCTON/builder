@@ -1,11 +1,10 @@
 import type { FeedbackContext } from './context'
-import republishGuideURL from './assets/republish-guide.svg'
 
 export type FeedbackSource = 'globalForm'
 export type FeedbackStatus = 'new' | 'handled' | 'replied'
 export type { FeedbackContext } from './context'
 
-export const feedbackDemoMockVersion = 11
+export const feedbackDemoMockVersion = 12
 
 export interface FeedbackAttachment {
   id: string
@@ -30,7 +29,6 @@ export interface FeedbackSubmission extends FeedbackDraft {
   createdAt: string
   handledAt: string | null
   reply: string | null
-  replyAttachments: FeedbackAttachment[]
   repliedAt: string | null
   context?: FeedbackContext
 }
@@ -41,7 +39,6 @@ export interface InProductNotification {
   feedbackID: string
   title: string
   body: string
-  attachments: FeedbackAttachment[]
   createdAt: string
   readAt: string | null
 }
@@ -82,7 +79,6 @@ const mockData: FeedbackDemoData = {
       createdAt: '2026-08-03T09:25:00+08:00',
       handledAt: null,
       reply: null,
-      replyAttachments: [],
       repliedAt: null,
       context: {
         version: 2,
@@ -165,24 +161,90 @@ const mockData: FeedbackDemoData = {
       createdAt: '2026-08-02T16:10:00+08:00',
       handledAt: null,
       reply: '发布页面的问题已经修复，请重新发布项目后再试一次。',
-      replyAttachments: [
-        { id: 'reply-attachment-1001-1', name: '重新发布项目指南.svg', size: 24_832, url: republishGuideURL }
-      ],
       repliedAt: '2026-08-02T16:32:00+08:00'
     }
   ],
   notifications: [
+    {
+      id: 'notification-1009',
+      userID: 'user-xiaoyu',
+      feedbackID: 'feedback-1009',
+      title: '项目保存问题已处理',
+      body: '自动保存服务已经恢复，刷新编辑器后即可继续创作。',
+      createdAt: '2026-08-10T10:18:00+08:00',
+      readAt: null
+    },
+    {
+      id: 'notification-1008',
+      userID: 'user-xiaoyu',
+      feedbackID: 'feedback-1008',
+      title: '素材上传问题已修复',
+      body: '现在可以重新上传角色图片，我们也优化了失败提示。',
+      createdAt: '2026-08-09T15:42:00+08:00',
+      readAt: null
+    },
+    {
+      id: 'notification-1007',
+      userID: 'user-xiaoyu',
+      feedbackID: 'feedback-1007',
+      title: '运行速度问题已优化',
+      body: '我们减少了首次运行时的资源加载时间，请再试一次。',
+      createdAt: '2026-08-08T13:25:00+08:00',
+      readAt: null
+    },
+    {
+      id: 'notification-1006',
+      userID: 'user-xiaoyu',
+      feedbackID: 'feedback-1006',
+      title: '声音播放问题已处理',
+      body: '循环播放声音时的中断问题已经修复。',
+      createdAt: '2026-08-07T11:08:00+08:00',
+      readAt: null
+    },
+    {
+      id: 'notification-1005',
+      userID: 'user-xiaoyu',
+      feedbackID: 'feedback-1005',
+      title: '代码提示问题已修复',
+      body: '补全列表现在会正确显示项目中的角色名称。',
+      createdAt: '2026-08-06T16:50:00+08:00',
+      readAt: null
+    },
+    {
+      id: 'notification-1004',
+      userID: 'user-xiaoyu',
+      feedbackID: 'feedback-1004',
+      title: '作品封面问题已处理',
+      body: '重新发布后，作品页会显示最新封面。',
+      createdAt: '2026-08-05T14:36:00+08:00',
+      readAt: null
+    },
+    {
+      id: 'notification-1003',
+      userID: 'user-xiaoyu',
+      feedbackID: 'feedback-1003',
+      title: '角色动画问题已修复',
+      body: '切换造型时的闪烁问题已经处理。',
+      createdAt: '2026-08-04T12:20:00+08:00',
+      readAt: '2026-08-04T12:45:00+08:00'
+    },
+    {
+      id: 'notification-1002',
+      userID: 'user-xiaoyu',
+      feedbackID: 'feedback-demo-1002',
+      title: '加载界面问题已定位',
+      body: '问题与一条无效指令有关，请按回复中的建议修改后重试。',
+      createdAt: '2026-08-03T10:05:00+08:00',
+      readAt: '2026-08-03T10:30:00+08:00'
+    },
     {
       id: 'notification-1001',
       userID: 'user-xiaoyu',
       feedbackID: 'feedback-1001',
       title: '支持团队回复了你的反馈',
       body: '发布页面的问题已经修复，请重新发布项目后再试一次。',
-      attachments: [
-        { id: 'reply-attachment-1001-1', name: '重新发布项目指南.svg', size: 24_832, url: republishGuideURL }
-      ],
       createdAt: '2026-08-02T16:32:00+08:00',
-      readAt: null
+      readAt: '2026-08-02T17:00:00+08:00'
     }
   ]
 }
@@ -208,12 +270,8 @@ export function createMockFeedbackDemoData(): FeedbackDemoData {
     feedbacks: mockData.feedbacks.map((feedback) => ({
       ...feedback,
       attachments: cloneAttachments(feedback.attachments),
-      replyAttachments: cloneAttachments(feedback.replyAttachments),
       context: feedback.context == null ? undefined : cloneFeedbackContext(feedback.context)
     })),
-    notifications: mockData.notifications.map((notification) => ({
-      ...notification,
-      attachments: cloneAttachments(notification.attachments)
-    }))
+    notifications: mockData.notifications.map((notification) => ({ ...notification }))
   }
 }

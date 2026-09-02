@@ -6,12 +6,7 @@ import { useI18n, type LocaleMessage } from '@/utils/i18n'
 import { usePageTitle } from '@/utils/utils'
 import { UIButton, UIIcon, UITextInput } from '@/components/ui'
 import { useFeedbackDemoModel } from '@/components/feedback-demo/model'
-import type {
-  FeedbackAttachment,
-  FeedbackSource,
-  FeedbackStatus,
-  FeedbackSubmission
-} from '@/components/feedback-demo/mock-data'
+import type { FeedbackSource, FeedbackStatus, FeedbackSubmission } from '@/components/feedback-demo/mock-data'
 
 usePageTitle({ en: 'Feedback', zh: '用户反馈' })
 
@@ -20,7 +15,6 @@ const i18n = useI18n()
 const feedbackDemo = useFeedbackDemoModel()
 const selectedFeedbackID = ref<string | null>(null)
 const reply = ref('')
-const replyAttachments = ref<FeedbackAttachment[]>([])
 const replySent = ref(false)
 
 const sourceLabels: Record<FeedbackSource, LocaleMessage> = {
@@ -47,16 +41,14 @@ const pendingCount = computed(() => feedbackDemo.data.feedbacks.filter((feedback
 
 watch(selectedFeedbackID, () => {
   reply.value = ''
-  replyAttachments.value = []
   replySent.value = false
 })
 
 function handleReply() {
   if (selectedFeedback.value == null) return
-  const updated = feedbackDemo.replyToFeedback(selectedFeedback.value.id, reply.value, replyAttachments.value)
+  const updated = feedbackDemo.replyToFeedback(selectedFeedback.value.id, reply.value)
   if (updated == null) return
   reply.value = ''
-  replyAttachments.value = []
   replySent.value = true
 }
 
@@ -64,30 +56,6 @@ function handleMarkHandled() {
   if (selectedFeedback.value == null) return
   feedbackDemo.markFeedbackHandled(selectedFeedback.value.id)
   reply.value = ''
-  replyAttachments.value = []
-}
-
-function handleReplyFiles(event: Event) {
-  const input = event.target as HTMLInputElement
-  if (input.files == null) return
-  const sequence = Date.now()
-  const images = Array.from(input.files).filter((file) => file.type.startsWith('image/'))
-  replyAttachments.value = [
-    ...replyAttachments.value,
-    ...images.map((file, index) => ({
-      id: `reply-attachment-${sequence}-${index}`,
-      name: file.name,
-      size: file.size,
-      url: URL.createObjectURL(file)
-    }))
-  ]
-  input.value = ''
-}
-
-function removeReplyAttachment(id: string) {
-  const attachment = replyAttachments.value.find((item) => item.id === id)
-  if (attachment?.url?.startsWith('blob:')) URL.revokeObjectURL(attachment.url)
-  replyAttachments.value = replyAttachments.value.filter((attachment) => attachment.id !== id)
 }
 
 function showUserNotification() {
@@ -99,7 +67,6 @@ function resetMockData() {
   feedbackDemo.reset()
   selectedFeedbackID.value = null
   reply.value = ''
-  replyAttachments.value = []
   replySent.value = false
 }
 
@@ -488,46 +455,6 @@ function formatRuntimeTime(value: string) {
               :placeholder="$t({ en: 'Write a clear reply for the user', zh: '填写一条清晰的用户回复' })"
             />
           </label>
-          <div class="mt-3">
-            <label
-              class="inline-flex cursor-pointer items-center gap-2 rounded-md border border-dashed border-grey-500 bg-white px-3 py-2 text-xs text-grey-900 transition-colors hover:border-primary-main hover:bg-primary-100 focus-within:border-primary-main focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-primary-main"
-            >
-              <UIIcon type="localFile" class="size-3.5" />
-              {{ $t({ en: 'Attach images', zh: '添加图片' }) }}
-              <input
-                v-radar="{ name: 'Reply images', desc: 'Choose optional images to send with the support reply' }"
-                class="sr-only"
-                type="file"
-                multiple
-                accept="image/*"
-                @change="handleReplyFiles"
-              />
-            </label>
-            <div v-if="replyAttachments.length > 0" class="mt-2 flex flex-wrap gap-2">
-              <span
-                v-for="attachment in replyAttachments"
-                :key="attachment.id"
-                class="inline-flex items-center gap-2 rounded-md bg-grey-300 px-2.5 py-1.5 text-xs text-grey-900"
-              >
-                <UIIcon type="file" class="size-3.5" />
-                {{ attachment.name }} · {{ formatFileSize(attachment.size) }}
-                <button
-                  v-radar="{ name: 'Remove reply attachment', desc: `Remove ${attachment.name} from the reply` }"
-                  :aria-label="
-                    $t({
-                      en: `Remove reply attachment: ${attachment.name}`,
-                      zh: `移除回复附件：${attachment.name}`
-                    })
-                  "
-                  type="button"
-                  class="inline-flex size-6 flex-none cursor-pointer items-center justify-center rounded-full border-0 bg-transparent p-0 text-grey-800 transition-colors hover:bg-grey-400 active:bg-grey-500 hover:text-red-main focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-primary-main"
-                  @click="removeReplyAttachment(attachment.id)"
-                >
-                  <UIIcon type="close" class="size-3" />
-                </button>
-              </span>
-            </div>
-          </div>
           <div class="mt-3 flex flex-col gap-3 tablet:flex-row tablet:items-end tablet:justify-between">
             <UIButton type="white" @click="handleMarkHandled">
               {{ $t({ en: 'Mark as no reply needed', zh: '标记为无需回复' }) }}
@@ -559,27 +486,6 @@ function formatRuntimeTime(value: string) {
                   {{ $t({ en: 'Reply sent', zh: '回复已发送' }) }}
                 </h4>
                 <p class="mt-1 text-sm leading-6 text-grey-1000">{{ selectedFeedback.reply }}</p>
-                <div v-if="selectedFeedback.replyAttachments.length > 0" class="mt-3 flex flex-wrap gap-2">
-                  <template v-for="attachment in selectedFeedback.replyAttachments" :key="attachment.id">
-                    <a
-                      v-if="attachment.url != null"
-                      class="inline-flex items-center gap-2 rounded-md bg-white/70 px-2.5 py-1.5 text-xs text-grey-900 no-underline transition-colors hover:bg-white hover:text-primary-main focus-visible:outline-2 focus-visible:outline-primary-main"
-                      :href="attachment.url"
-                      target="_blank"
-                      rel="noreferrer"
-                    >
-                      <UIIcon type="file" class="size-3.5" />
-                      {{ attachment.name }} · {{ formatFileSize(attachment.size) }}
-                    </a>
-                    <span
-                      v-else
-                      class="inline-flex items-center gap-2 rounded-md bg-white/70 px-2.5 py-1.5 text-xs text-grey-900"
-                    >
-                      <UIIcon type="file" class="size-3.5" />
-                      {{ attachment.name }} · {{ formatFileSize(attachment.size) }}
-                    </span>
-                  </template>
-                </div>
                 <time v-if="selectedFeedback.repliedAt != null" class="mt-2 block text-xs text-grey-800">
                   {{ formatTime(selectedFeedback.repliedAt) }}
                 </time>

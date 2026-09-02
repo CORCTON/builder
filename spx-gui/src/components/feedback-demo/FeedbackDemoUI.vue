@@ -16,6 +16,7 @@ import type { FeedbackAttachment, InProductNotification } from './mock-data'
 import { captureViewport } from '@/components/screenshot/capture'
 
 const model = useFeedbackDemoModel()
+const notificationPageSize = 5
 const copilot = useCopilot()
 const i18n = useI18n()
 const { t } = i18n
@@ -27,8 +28,9 @@ const isSubmitting = ref(false)
 const activeSubmission = ref<symbol | null>(null)
 const pendingCopilotFeedback = ref<PreparedFeedbackDraft | null>(null)
 const selectedNotificationID = ref<string | null>(null)
-const failedNotificationImageIDs = ref(new Set<string>())
+const visibleNotificationCount = ref(notificationPageSize)
 const notificationTitleID = useId()
+const visibleNotifications = computed(() => model.data.notifications.slice(0, visibleNotificationCount.value))
 const selectedNotification = computed(
   () => model.data.notifications.find((notification) => notification.id === selectedNotificationID.value) ?? null
 )
@@ -64,6 +66,7 @@ watch(model.activeFormSource, (source, previousSource) => {
 
 watch(model.notificationCenterOpen, (open) => {
   if (!open) selectedNotificationID.value = null
+  if (open) visibleNotificationCount.value = notificationPageSize
 })
 
 async function handleSubmit(input: SubmitFeedbackInput) {
@@ -154,10 +157,6 @@ function backToNotificationList() {
   selectedNotificationID.value = null
 }
 
-function handleNotificationImageError(id: string) {
-  failedNotificationImageIDs.value = new Set(failedNotificationImageIDs.value).add(id)
-}
-
 function formatTime(value: string) {
   return new Intl.DateTimeFormat(i18n.lang.value === 'zh' ? 'zh-CN' : 'en-US', {
     month: 'short',
@@ -167,15 +166,8 @@ function formatTime(value: string) {
   }).format(new Date(value))
 }
 
-function formatFileSize(size: number) {
-  return size < 1024 * 1024 ? `${Math.max(1, Math.round(size / 1024))} KB` : `${(size / 1024 / 1024).toFixed(1)} MB`
-}
-
-function formatAttachmentCount(count: number) {
-  return t({
-    en: `${count} ${count === 1 ? 'attachment' : 'attachments'}`,
-    zh: `${count} 个附件`
-  })
+function loadMoreNotifications() {
+  visibleNotificationCount.value += notificationPageSize
 }
 </script>
 
@@ -227,7 +219,7 @@ function formatAttachmentCount(count: number) {
       </div>
       <div v-else class="max-h-[480px] overflow-y-auto">
         <button
-          v-for="notification in model.data.notifications"
+          v-for="notification in visibleNotifications"
           :key="notification.id"
           v-radar="{
             name: 'Support notification',
@@ -257,17 +249,18 @@ function formatAttachmentCount(count: number) {
                 <time class="shrink-0 text-xs text-grey-800">{{ formatTime(notification.createdAt) }}</time>
               </div>
               <p class="mt-1 truncate text-sm text-grey-900">{{ notification.body }}</p>
-              <div
-                v-if="notification.attachments.length > 0"
-                class="mt-2 flex items-center gap-1 text-xs text-grey-800"
-              >
-                <UIIcon type="file" class="size-3" />
-                {{ formatAttachmentCount(notification.attachments.length) }}
-              </div>
             </div>
             <UIIcon type="arrowRightSmall" class="mt-1 size-4 shrink-0 text-grey-600" />
           </div>
         </button>
+        <div
+          v-if="visibleNotificationCount < model.data.notifications.length"
+          class="border-t border-grey-300 p-3 text-center"
+        >
+          <UIButton type="white" size="small" @click="loadMoreNotifications">
+            {{ $t({ en: 'Load more', zh: '加载更多' }) }}
+          </UIButton>
+        </div>
       </div>
     </div>
 
@@ -303,64 +296,6 @@ function formatAttachmentCount(count: number) {
 
       <article class="max-h-[480px] overflow-y-auto px-5 py-5">
         <p class="whitespace-pre-wrap text-sm leading-6 text-grey-1000">{{ selectedNotification.body }}</p>
-
-        <section v-if="selectedNotification.attachments.length > 0" class="mt-6">
-          <h4 class="text-sm font-semibold text-title">{{ $t({ en: 'Images', zh: '图片' }) }}</h4>
-          <div class="mt-2 grid gap-3">
-            <template v-for="attachment in selectedNotification.attachments" :key="attachment.id">
-              <a
-                v-if="attachment.url != null && !failedNotificationImageIDs.has(attachment.id)"
-                v-radar="{
-                  name: $t({ en: 'Open image', zh: '查看大图' }),
-                  desc: attachment.name
-                }"
-                class="group block overflow-hidden rounded-lg border border-grey-400 bg-grey-100 no-underline transition-colors hover:border-primary-main hover:bg-primary-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-main active:bg-primary-200"
-                :href="attachment.url"
-                target="_blank"
-                rel="noreferrer"
-                :aria-label="
-                  $t({
-                    en: `Open ${attachment.name} full size in a new tab`,
-                    zh: `在新标签页查看大图：${attachment.name}`
-                  })
-                "
-              >
-                <div class="flex aspect-video items-center justify-center overflow-hidden bg-grey-200">
-                  <img
-                    class="h-full w-full object-contain"
-                    :src="attachment.url"
-                    alt=""
-                    @error="handleNotificationImageError(attachment.id)"
-                  />
-                </div>
-                <div class="flex min-h-11 items-center justify-between gap-3 px-3 py-2.5">
-                  <span class="min-w-0">
-                    <span class="block truncate text-sm font-medium text-title">{{ attachment.name }}</span>
-                    <span class="mt-0.5 block text-xs text-grey-800">{{ formatFileSize(attachment.size) }}</span>
-                  </span>
-                  <span class="flex shrink-0 items-center gap-1 text-xs font-medium text-primary-main">
-                    {{ $t({ en: 'View full size', zh: '查看大图' }) }}
-                    <UIIcon type="fullScreen" class="size-3.5" />
-                  </span>
-                </div>
-              </a>
-              <div
-                v-else
-                class="flex min-h-11 items-center gap-3 rounded-lg border border-grey-400 bg-grey-100 px-3 py-3"
-              >
-                <span class="flex size-9 shrink-0 items-center justify-center rounded-md bg-grey-300 text-grey-900">
-                  <UIIcon type="file" class="size-4" />
-                </span>
-                <span class="min-w-0">
-                  <span class="block truncate text-sm font-medium text-title">{{ attachment.name }}</span>
-                  <span class="mt-0.5 block text-xs text-grey-800">
-                    {{ $t({ en: 'Preview unavailable', zh: '图片暂时无法预览' }) }}
-                  </span>
-                </span>
-              </div>
-            </template>
-          </div>
-        </section>
       </article>
     </div>
   </UIModal>

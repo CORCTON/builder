@@ -66,7 +66,6 @@ export function createFeedbackDemoModel(initialData = createMockFeedbackDemoData
       createdAt: new Date().toISOString(),
       handledAt: null,
       reply: null,
-      replyAttachments: [],
       repliedAt: null,
       context:
         input.includeContext === false || input.context == null ? undefined : cloneFeedbackContext(input.context),
@@ -77,7 +76,7 @@ export function createFeedbackDemoModel(initialData = createMockFeedbackDemoData
     return feedback
   }
 
-  function replyToFeedback(feedbackID: string, replyInput: string, attachments: FeedbackAttachment[] = []) {
+  function replyToFeedback(feedbackID: string, replyInput: string) {
     const feedback = data.feedbacks.find((item) => item.id === feedbackID)
     const reply = replyInput.trim()
     if (feedback == null || feedback.status !== 'new' || reply === '') return null
@@ -85,7 +84,6 @@ export function createFeedbackDemoModel(initialData = createMockFeedbackDemoData
     const repliedAt = new Date().toISOString()
     feedback.status = 'replied'
     feedback.reply = reply
-    feedback.replyAttachments = attachments.map((attachment) => ({ ...attachment }))
     feedback.repliedAt = repliedAt
     data.notifications.unshift({
       id: `notification-${data.notifications.length + 1001}`,
@@ -93,7 +91,6 @@ export function createFeedbackDemoModel(initialData = createMockFeedbackDemoData
       feedbackID: feedback.id,
       title: '支持团队回复了你的反馈',
       body: reply,
-      attachments: attachments.map((attachment) => ({ ...attachment })),
       createdAt: repliedAt,
       readAt: null
     })

@@ -74,8 +74,7 @@ details may be omitted when unavailable, but this must not prevent Feedback from
 
 ### Attachment
 
-The screenshot generated at Feedback submission is stored as an image attachment. Administrators can attach images to
-Replies.
+The screenshot generated at Feedback submission is stored as an image attachment.
 
 The image size limit comes from `maxSize` returned by the Upload Session. The client checks the generated screenshot,
 and the server and object storage check it again:
@@ -91,7 +90,7 @@ the `feedbackAdmin` role, then return a short-lived signed URL. Attachments cann
 
 ### Reply
 
-A Reply is an administrator's response to a Feedback. It may contain text and image attachments.
+A Reply is an administrator's text response to a Feedback.
 
 After a Reply is saved, the Feedback changes to `replied` and the submitting user receives an in-product notification.
 
@@ -99,8 +98,8 @@ After a Reply is saved, the Feedback changes to `replied` and the submitting use
 
 An In-Product Notification delivers an administrator's reply to the user.
 
-It contains the reply, reply time, and reply attachments. Users can view the unread count, notification list, and
-notification details from the navigation bar.
+It contains the reply and reply time. Users can view the unread count, notification list, and notification details from
+the navigation bar.
 
 ## User Flows
 
@@ -211,5 +210,4 @@ no reply. When concurrent processing occurs, the interface shows the operation t
 
 ### User Views a Reply
 
-After an administrator replies, the user sees an unread notification in the navigation bar and can view the reply and its
-image attachments.
+After an administrator replies, the user sees an unread notification in the navigation bar and can view the reply.

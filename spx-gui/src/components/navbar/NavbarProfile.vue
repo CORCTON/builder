@@ -3,11 +3,12 @@ import { computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useNetwork } from '@/utils/network'
 import { useMessageHandle } from '@/utils/exception'
+import { useExternalUrl } from '@/utils/utils'
 import { getUserPageRoute } from '@/apps/xbuilder/router'
 import { AssetType } from '@/apis/asset'
 import { signOut, useSignIn, useSignedInStateQuery } from '@/stores/user'
-import { useAvatarUrl } from '@/stores/user/avatar'
 import { UIButton, UIDropdown, UIMenu, UIMenuGroup, UIMenuItem, UITooltip } from '@/components/ui'
+import { useFeedbackDemoModel } from '@/components/feedback-demo/model'
 import { useAssetLibraryManagement } from '@/components/asset'
 import { useCourseManagement, useCourseSeriesManagement } from '@/components/course'
 import { useI18n } from '@/utils/i18n'
@@ -18,6 +19,7 @@ const { isOnline } = useNetwork()
 const router = useRouter()
 const i18n = useI18n()
 const signIn = useSignIn()
+const feedbackDemo = useFeedbackDemoModel()
 
 const signedInStateQuery = useSignedInStateQuery()
 const loading = computed(() => signedInStateQuery.isLoading.value)
@@ -27,7 +29,7 @@ const canUseAccountAdmin = computed(
     signedInUser.value?.capabilities.canManageAccount === true ||
     signedInUser.value?.capabilities.canManageAuthorization === true
 )
-const avatarUrl = useAvatarUrl(() => signedInUser.value?.avatar)
+const avatarUrl = useExternalUrl(() => signedInUser.value?.avatar)
 
 const langContent = computed(() => (i18n.lang.value === 'en' ? enSvg : zhSvg))
 function toggleLang() {
@@ -105,6 +107,9 @@ async function handleSignOut() {
         </UIMenuItem>
         <UIMenuItem @click="handleProjects">
           {{ $t({ en: 'Projects', zh: '项目列表' }) }}
+        </UIMenuItem>
+        <UIMenuItem @click="feedbackDemo.openFeedbackForm('globalForm')">
+          {{ $t({ en: 'Send feedback', zh: '提交反馈' }) }}
         </UIMenuItem>
       </UIMenuGroup>
       <UIMenuGroup v-if="signedInUser?.capabilities.canManageAssets">

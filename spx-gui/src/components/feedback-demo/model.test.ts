@@ -178,7 +178,7 @@ describe('feedback demo model', () => {
     })
   })
 
-  it('marks notification title for feedback with images', () => {
+  it('keeps reply notification title stable when feedback has images', () => {
     const model = createFeedbackDemoModel()
     const feedback = model.submitFeedback({
       source: 'globalForm',
@@ -189,6 +189,6 @@ describe('feedback demo model', () => {
 
     model.replyToFeedback(feedback.id, 'Thanks, please check the attached screenshot.')
 
-    expect(model.data.notifications[0].title).toContain('图片')
+    expect(model.data.notifications[0].title).toBe('支持团队回复了你的反馈')
   })
 })

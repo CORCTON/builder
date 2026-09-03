@@ -1,12 +1,12 @@
 import type { FeedbackContext } from './context'
 
-import feedbackDemoImageUrl from '@/components/app/device-check/desktop-required.png'
+import feedbackDemoImageUrl from './assets/xbuilder-loading-screen.jpg'
 
 export type FeedbackSource = 'globalForm'
 export type FeedbackStatus = 'new' | 'handled' | 'replied'
 export type { FeedbackContext } from './context'
 
-export const feedbackDemoMockVersion = 13
+export const feedbackDemoMockVersion = 14
 
 export interface FeedbackAttachment {
   id: string
@@ -80,8 +80,8 @@ const mockData: FeedbackDemoData = {
       attachments: [
         {
           id: 'attachment-1002-1',
-          name: 'loading-screen.png',
-          size: 284_512,
+          name: 'xbuilder-loading-screen.jpg',
+          size: 169_249,
           url: feedbackDemoImageUrl
         }
       ],
@@ -178,7 +178,7 @@ const mockData: FeedbackDemoData = {
       id: 'notification-1009',
       userID: 'user-xiaoyu',
       feedbackID: 'feedback-1002',
-      title: '加载界面问题已定位（含图片）',
+      title: '加载界面问题已定位',
       body: '我们根据你提交的截图定位了问题，请按回复中的建议修改后重试。',
       createdAt: '2026-08-10T10:18:00+08:00',
       readAt: null

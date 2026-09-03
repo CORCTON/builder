@@ -3,7 +3,7 @@ import { computed, nextTick, onScopeDispose, ref, useId, watch } from 'vue'
 import { useRoute } from 'vue-router'
 
 import { useI18n } from '@/utils/i18n'
-import { UIButton, UIFormModal, UIIcon, UIModal, useMessage } from '@/components/ui'
+import { UIButton, UIFormModal, UIIcon, UIModal, UIModalClose, useMessage } from '@/components/ui'
 import { useCopilot } from '@/components/copilot/context'
 import { RoundState } from '@/components/copilot/copilot'
 import { useEditorCtxRef } from '@/components/editor/EditorContextProvider.vue'
@@ -30,6 +30,9 @@ const pendingCopilotFeedback = ref<PreparedFeedbackDraft | null>(null)
 const selectedNotificationID = ref<string | null>(null)
 const visibleNotificationCount = ref(notificationPageSize)
 const notificationTitleID = useId()
+const imagePreviewTitleID = useId()
+type RenderableFeedbackAttachment = FeedbackAttachment & { url: string }
+const selectedPreviewAttachment = ref<RenderableFeedbackAttachment | null>(null)
 const visibleNotifications = computed(() => model.data.notifications.slice(0, visibleNotificationCount.value))
 const selectedNotification = computed(
   () => model.data.notifications.find((notification) => notification.id === selectedNotificationID.value) ?? null
@@ -40,7 +43,16 @@ const selectedNotificationFeedback = computed(() => {
     ? null
     : model.data.feedbacks.find((feedback) => feedback.id === notification.feedbackID) ?? null
 })
-const selectedNotificationAttachments = computed(() => selectedNotificationFeedback.value?.attachments ?? [])
+const selectedNotificationImageAttachments = computed(() =>
+  (selectedNotificationFeedback.value?.attachments ?? []).filter(isRenderableImageAttachment)
+)
+const notificationImageAttachmentCountMap = computed(() => {
+  const countMap = new Map<string, number>()
+  for (const feedback of model.data.feedbacks) {
+    countMap.set(feedback.id, feedback.attachments.filter(isRenderableImageAttachment).length)
+  }
+  return countMap
+})
 
 onScopeDispose(
   copilot.registerTool(
@@ -72,7 +84,10 @@ watch(model.activeFormSource, (source, previousSource) => {
 })
 
 watch(model.notificationCenterOpen, (open) => {
-  if (!open) selectedNotificationID.value = null
+  if (!open) {
+    selectedNotificationID.value = null
+    selectedPreviewAttachment.value = null
+  }
   if (open) visibleNotificationCount.value = notificationPageSize
 })
 
@@ -156,11 +171,13 @@ async function captureFeedbackScreenshot(): Promise<FeedbackAttachment> {
 }
 
 function openNotification(notification: InProductNotification) {
+  selectedPreviewAttachment.value = null
   selectedNotificationID.value = notification.id
   model.markNotificationRead(notification.id)
 }
 
 function backToNotificationList() {
+  selectedPreviewAttachment.value = null
   selectedNotificationID.value = null
 }
 
@@ -175,6 +192,51 @@ function formatTime(value: string) {
 
 function formatFileSize(size: number) {
   return size < 1024 * 1024 ? Math.max(1, Math.round(size / 1024)) + ' KB' : (size / 1024 / 1024).toFixed(1) + ' MB'
+}
+
+function formatImageCount(count: number) {
+  return t({
+    en: `${count} image${count === 1 ? '' : 's'}`,
+    zh: `${count} 张图片`
+  })
+}
+
+const imageFileExtensionPattern = /\.(apng|avif|bmp|gif|jpe?g|png|svg|webp)(?:[?#].*)?$/i
+
+function isRenderableImageAttachment(attachment: FeedbackAttachment): attachment is RenderableFeedbackAttachment {
+  if (attachment.url == null || attachment.url.trim() === '') return false
+  if (attachment.url.startsWith('blob:') || attachment.url.startsWith('data:image/')) return true
+  return imageFileExtensionPattern.test(attachment.name) || imageFileExtensionPattern.test(attachment.url)
+}
+
+function getNotificationImageAttachmentCount(notification: InProductNotification) {
+  return notificationImageAttachmentCountMap.value.get(notification.feedbackID) ?? 0
+}
+
+function getAttachmentPreviewAriaLabel(attachment: RenderableFeedbackAttachment) {
+  return t({
+    en: `Preview image: ${attachment.name}`,
+    zh: `预览图片：${attachment.name}`
+  })
+}
+
+function getAttachmentAlt(attachment: RenderableFeedbackAttachment) {
+  return t({
+    en: `Submitted feedback image: ${attachment.name}`,
+    zh: `反馈提交图片：${attachment.name}`
+  })
+}
+
+function openAttachmentPreview(attachment: RenderableFeedbackAttachment) {
+  selectedPreviewAttachment.value = attachment
+}
+
+function closeAttachmentPreview() {
+  selectedPreviewAttachment.value = null
+}
+
+function handlePreviewVisibleChange(visible: boolean) {
+  if (!visible) closeAttachmentPreview()
 }
 
 function loadMoreNotifications() {
@@ -260,6 +322,13 @@ function loadMoreNotifications() {
                 <time class="shrink-0 text-xs text-grey-800">{{ formatTime(notification.createdAt) }}</time>
               </div>
               <p class="mt-1 truncate text-sm text-grey-900">{{ notification.body }}</p>
+              <div
+                v-if="getNotificationImageAttachmentCount(notification) > 0"
+                class="mt-2 inline-flex items-center gap-1 rounded-full bg-grey-200 px-2 py-0.5 text-xs text-grey-900"
+              >
+                <UIIcon type="camera" class="size-3 text-grey-800" />
+                <span>{{ formatImageCount(getNotificationImageAttachmentCount(notification)) }}</span>
+              </div>
             </div>
             <UIIcon type="arrowRightSmall" class="mt-1 size-4 shrink-0 text-grey-600" />
           </div>
@@ -306,39 +375,94 @@ function loadMoreNotifications() {
       </div>
 
       <article class="max-h-[480px] overflow-y-auto px-5 py-5">
-        <p class="whitespace-pre-wrap text-sm leading-6 text-grey-1000">{{ selectedNotification.body }}</p>
+        <div class="mb-4">
+          <p class="text-xs font-medium text-grey-900">
+            {{ $t({ en: 'Reply from XBuilder Support', zh: 'XBuilder 支持团队回复' }) }}
+          </p>
+          <time class="mt-1 block text-xs text-grey-800">{{ formatTime(selectedNotification.createdAt) }}</time>
+        </div>
 
-        <template v-if="selectedNotificationAttachments.length > 0">
-          <h3 class="mt-6 text-sm font-semibold text-title">{{ $t({ en: 'Images', zh: '图片' }) }}</h3>
-          <div class="mt-2 grid gap-3 grid-cols-2 sm:grid-cols-3">
-            <template v-for="attachment in selectedNotificationAttachments" :key="attachment.id">
-              <a
-                v-if="attachment.url != null"
-                class="group block overflow-hidden rounded-lg border border-grey-400 bg-grey-100 no-underline transition-colors hover:border-primary-main hover:bg-primary-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-main"
-                :href="attachment.url"
-                target="_blank"
-                rel="noreferrer"
-                :aria-label="$t({ en: `Open ${attachment.name} full size in a new tab`, zh: `在新标签页查看大图：${attachment.name}` })"
-              >
-                <div class="flex aspect-square items-center justify-center overflow-hidden bg-grey-200">
-                  <img
-                    class="h-full w-full object-cover"
-                    :src="attachment.url"
-                    :alt="attachment.name"
-                  />
-                </div>
-                <div class="flex min-h-10 items-center justify-between gap-2 px-2 py-1.5">
-                  <span class="min-w-0">
-                    <span class="block truncate text-xs font-medium text-title">{{ attachment.name }}</span>
-                    <span class="block text-xs text-grey-800">{{ formatFileSize(attachment.size) }}</span>
-                  </span>
-                  <UIIcon type="fullScreen" class="size-3.5 shrink-0 text-primary-main" />
-                </div>
-              </a>
-            </template>
+        <p class="whitespace-pre-wrap text-base leading-7 text-grey-1000">{{ selectedNotification.body }}</p>
+
+        <section class="mt-5 rounded-lg border border-grey-300 bg-grey-100 px-3 py-2.5">
+          <p class="text-xs font-medium text-grey-800">{{ $t({ en: 'Related feedback', zh: '关联反馈' }) }}</p>
+          <p class="mt-1 text-sm text-title">
+            {{
+              selectedNotificationFeedback?.title ??
+              $t({ en: 'The original feedback is not available.', zh: '原始反馈暂不可用。' })
+            }}
+          </p>
+        </section>
+
+        <template v-if="selectedNotificationImageAttachments.length > 0">
+          <div class="mt-6 flex items-center justify-between gap-3">
+            <h3 class="text-sm font-semibold text-title">
+              {{ $t({ en: 'Images you submitted', zh: '你提交的图片' }) }}
+            </h3>
+            <span class="text-xs text-grey-800">{{
+              formatImageCount(selectedNotificationImageAttachments.length)
+            }}</span>
+          </div>
+          <div class="mt-2 grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <button
+              v-for="attachment in selectedNotificationImageAttachments"
+              :key="attachment.id"
+              type="button"
+              class="group block w-full cursor-zoom-in overflow-hidden rounded-lg border border-grey-400 bg-grey-100 text-left transition-colors hover:border-primary-main hover:bg-primary-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-main"
+              :aria-label="getAttachmentPreviewAriaLabel(attachment)"
+              @click="openAttachmentPreview(attachment)"
+            >
+              <div class="relative flex aspect-[16/10] items-center justify-center overflow-hidden bg-grey-200 p-2">
+                <img class="h-full w-full object-contain" :src="attachment.url" :alt="getAttachmentAlt(attachment)" />
+                <span
+                  class="pointer-events-none absolute right-2 top-2 inline-flex items-center gap-1 rounded bg-black/65 px-1.5 py-0.5 text-[11px] font-medium text-white"
+                >
+                  <UIIcon type="fullScreen" class="size-3 text-white" />
+                  {{ $t({ en: 'Preview', zh: '预览' }) }}
+                </span>
+              </div>
+              <div class="flex min-h-10 items-center justify-between gap-2 px-2 py-1.5">
+                <span class="min-w-0">
+                  <span class="block truncate text-xs font-medium text-title">{{ attachment.name }}</span>
+                  <span class="block text-xs text-grey-800">{{ formatFileSize(attachment.size) }}</span>
+                </span>
+                <UIIcon type="fullScreen" class="size-3.5 shrink-0 text-primary-main" />
+              </div>
+            </button>
           </div>
         </template>
       </article>
+    </div>
+  </UIModal>
+
+  <UIModal
+    :visible="selectedPreviewAttachment != null"
+    size="large"
+    class="w-[min(1040px,calc(100vw-2rem))]"
+    :aria-labelledby="imagePreviewTitleID"
+    :radar="{ name: 'Feedback image preview', desc: 'Previewing user-submitted feedback image' }"
+    @update:visible="handlePreviewVisibleChange"
+  >
+    <div v-if="selectedPreviewAttachment != null" class="flex max-h-[calc(100vh-2rem)] min-h-[360px] flex-col">
+      <div class="flex items-start justify-between gap-3 border-b border-grey-400 px-5 py-4">
+        <div class="min-w-0">
+          <h2 :id="imagePreviewTitleID" class="truncate text-base font-semibold text-title">
+            {{ selectedPreviewAttachment.name }}
+          </h2>
+          <p class="mt-1 text-xs text-grey-800">{{ formatFileSize(selectedPreviewAttachment.size) }}</p>
+        </div>
+        <UIModalClose
+          :aria-label="$t({ en: 'Close image preview', zh: '关闭图片预览' })"
+          @click="closeAttachmentPreview"
+        />
+      </div>
+      <div class="flex min-h-0 flex-1 items-center justify-center bg-grey-100 p-4 sm:p-6">
+        <img
+          class="max-h-full max-w-full object-contain"
+          :src="selectedPreviewAttachment.url"
+          :alt="getAttachmentAlt(selectedPreviewAttachment)"
+        />
+      </div>
     </div>
   </UIModal>
 </template>

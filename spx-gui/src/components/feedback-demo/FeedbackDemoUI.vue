@@ -34,12 +34,13 @@ const visibleNotifications = computed(() => model.data.notifications.slice(0, vi
 const selectedNotification = computed(
   () => model.data.notifications.find((notification) => notification.id === selectedNotificationID.value) ?? null
 )
-const selectedNotificationFeedback = computed(
-  () =>
-    selectedNotification.value == null
-      ? null
-      : model.data.feedbacks.find((feedback) => feedback.id === selectedNotification.value.feedbackID) ?? null
-)
+const selectedNotificationFeedback = computed(() => {
+  const notification = selectedNotification.value
+  return notification == null
+    ? null
+    : model.data.feedbacks.find((feedback) => feedback.id === notification.feedbackID) ?? null
+})
+const selectedNotificationAttachments = computed(() => selectedNotificationFeedback.value?.attachments ?? [])
 
 onScopeDispose(
   copilot.registerTool(
@@ -170,6 +171,10 @@ function formatTime(value: string) {
     hour: 'numeric',
     minute: '2-digit'
   }).format(new Date(value))
+}
+
+function formatFileSize(size: number) {
+  return size < 1024 * 1024 ? Math.max(1, Math.round(size / 1024)) + ' KB' : (size / 1024 / 1024).toFixed(1) + ' MB'
 }
 
 function loadMoreNotifications() {
@@ -303,10 +308,10 @@ function loadMoreNotifications() {
       <article class="max-h-[480px] overflow-y-auto px-5 py-5">
         <p class="whitespace-pre-wrap text-sm leading-6 text-grey-1000">{{ selectedNotification.body }}</p>
 
-        <template v-if="selectedNotificationFeedback?.attachments.length > 0">
+        <template v-if="selectedNotificationAttachments.length > 0">
           <h3 class="mt-6 text-sm font-semibold text-title">{{ $t({ en: 'Images', zh: '图片' }) }}</h3>
           <div class="mt-2 grid gap-3 grid-cols-2 sm:grid-cols-3">
-            <template v-for="attachment in selectedNotificationFeedback.attachments" :key="attachment.id">
+            <template v-for="attachment in selectedNotificationAttachments" :key="attachment.id">
               <a
                 v-if="attachment.url != null"
                 class="group block overflow-hidden rounded-lg border border-grey-400 bg-grey-100 no-underline transition-colors hover:border-primary-main hover:bg-primary-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-main"

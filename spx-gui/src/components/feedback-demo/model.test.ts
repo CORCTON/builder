@@ -170,4 +170,18 @@ describe('feedback demo model', () => {
       url: 'blob:mock'
     })
   })
+
+  it('marks notification title for feedback with images', () => {
+    const model = createFeedbackDemoModel()
+    const feedback = model.submitFeedback({
+      source: 'globalForm',
+      title: 'Image support',
+      description: 'Screenshot attached',
+      attachments: [{ id: 'attachment-1', name: 'screen.png', size: 1234, url: 'blob:mock' }]
+    })
+
+    model.replyToFeedback(feedback.id, 'Thanks, please check the attached screenshot.')
+
+    expect(model.data.notifications[0].title).toContain('图片')
+  })
 })

@@ -93,11 +93,12 @@ export function createFeedbackDemoModel(initialData = createMockFeedbackDemoData
     feedback.status = 'replied'
     feedback.reply = reply
     feedback.repliedAt = repliedAt
+    const notificationTitle = feedback.attachments.length > 0 ? '支持团队回复了你的反馈（含图片）' : '支持团队回复了你的反馈'
     data.notifications.unshift({
       id: `notification-${data.notifications.length + 1001}`,
       userID: feedback.userID,
       feedbackID: feedback.id,
-      title: '支持团队回复了你的反馈',
+      title: notificationTitle,
       body: reply,
       createdAt: repliedAt,
       readAt: null

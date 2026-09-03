@@ -34,6 +34,12 @@ const visibleNotifications = computed(() => model.data.notifications.slice(0, vi
 const selectedNotification = computed(
   () => model.data.notifications.find((notification) => notification.id === selectedNotificationID.value) ?? null
 )
+const selectedNotificationFeedback = computed(
+  () =>
+    selectedNotification.value == null
+      ? null
+      : model.data.feedbacks.find((feedback) => feedback.id === selectedNotification.value.feedbackID) ?? null
+)
 
 onScopeDispose(
   copilot.registerTool(
@@ -296,6 +302,37 @@ function loadMoreNotifications() {
 
       <article class="max-h-[480px] overflow-y-auto px-5 py-5">
         <p class="whitespace-pre-wrap text-sm leading-6 text-grey-1000">{{ selectedNotification.body }}</p>
+
+        <template v-if="selectedNotificationFeedback?.attachments.length > 0">
+          <h3 class="mt-6 text-sm font-semibold text-title">{{ $t({ en: 'Images', zh: '图片' }) }}</h3>
+          <div class="mt-2 grid gap-3 grid-cols-2 sm:grid-cols-3">
+            <template v-for="attachment in selectedNotificationFeedback.attachments" :key="attachment.id">
+              <a
+                v-if="attachment.url != null"
+                class="group block overflow-hidden rounded-lg border border-grey-400 bg-grey-100 no-underline transition-colors hover:border-primary-main hover:bg-primary-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-main"
+                :href="attachment.url"
+                target="_blank"
+                rel="noreferrer"
+                :aria-label="$t({ en: `Open ${attachment.name} full size in a new tab`, zh: `在新标签页查看大图：${attachment.name}` })"
+              >
+                <div class="flex aspect-square items-center justify-center overflow-hidden bg-grey-200">
+                  <img
+                    class="h-full w-full object-cover"
+                    :src="attachment.url"
+                    :alt="attachment.name"
+                  />
+                </div>
+                <div class="flex min-h-10 items-center justify-between gap-2 px-2 py-1.5">
+                  <span class="min-w-0">
+                    <span class="block truncate text-xs font-medium text-title">{{ attachment.name }}</span>
+                    <span class="block text-xs text-grey-800">{{ formatFileSize(attachment.size) }}</span>
+                  </span>
+                  <UIIcon type="fullScreen" class="size-3.5 shrink-0 text-primary-main" />
+                </div>
+              </a>
+            </template>
+          </div>
+        </template>
       </article>
     </div>
   </UIModal>

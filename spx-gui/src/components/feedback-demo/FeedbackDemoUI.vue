@@ -43,16 +43,16 @@ const selectedNotificationFeedback = computed(() => {
     ? null
     : model.data.feedbacks.find((feedback) => feedback.id === notification.feedbackID) ?? null
 })
-const selectedNotificationImageAttachments = computed(() =>
-  (selectedNotificationFeedback.value?.attachments ?? []).filter(isRenderableImageAttachment)
-)
-const notificationImageAttachmentCountMap = computed(() => {
-  const countMap = new Map<string, number>()
+const notificationImageAttachmentsMap = computed(() => {
+  const attachmentsMap = new Map<string, RenderableFeedbackAttachment[]>()
   for (const feedback of model.data.feedbacks) {
-    countMap.set(feedback.id, feedback.attachments.filter(isRenderableImageAttachment).length)
+    attachmentsMap.set(feedback.id, feedback.attachments.filter(isRenderableImageAttachment))
   }
-  return countMap
+  return attachmentsMap
 })
+const selectedNotificationImageAttachments = computed(
+  () => notificationImageAttachmentsMap.value.get(selectedNotification.value?.feedbackID ?? '') ?? []
+)
 
 onScopeDispose(
   copilot.registerTool(
@@ -209,8 +209,12 @@ function isRenderableImageAttachment(attachment: FeedbackAttachment): attachment
   return imageFileExtensionPattern.test(attachment.name) || imageFileExtensionPattern.test(attachment.url)
 }
 
+function getNotificationImageAttachments(notification: InProductNotification) {
+  return notificationImageAttachmentsMap.value.get(notification.feedbackID) ?? []
+}
+
 function getNotificationImageAttachmentCount(notification: InProductNotification) {
-  return notificationImageAttachmentCountMap.value.get(notification.feedbackID) ?? 0
+  return getNotificationImageAttachments(notification).length
 }
 
 function getAttachmentPreviewAriaLabel(attachment: RenderableFeedbackAttachment) {
@@ -298,36 +302,41 @@ function loadMoreNotifications() {
             name: 'Support notification',
             desc: notification.readAt == null ? 'Unread reply from XBuilder Support' : 'Reply from XBuilder Support'
           }"
-          class="block w-full appearance-none cursor-pointer border-x-0 border-t-0 border-b border-grey-300 px-5 py-4 text-left shadow-none transition-colors last:border-b-0 focus-visible:relative focus-visible:z-1 focus-visible:outline-2 focus-visible:outline-primary-main"
+          class="block w-full cursor-pointer border-b border-grey-200 px-5 py-4 text-left transition-colors last:border-b-0 focus-visible:relative focus-visible:z-1 focus-visible:outline-2 focus-visible:outline-primary-main"
           :class="
             notification.readAt == null
-              ? 'bg-primary-100/60 hover:bg-primary-200 active:bg-primary-300'
-              : 'bg-transparent hover:bg-grey-200 active:bg-grey-300'
+              ? 'bg-primary-100/40 hover:bg-primary-100/70 active:bg-primary-200'
+              : 'bg-white hover:bg-grey-100 active:bg-grey-200'
           "
           @click="openNotification(notification)"
         >
-          <div class="flex items-start gap-3">
+          <div class="grid grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-3">
             <span
-              class="mt-1.5 size-2 shrink-0 rounded-full"
-              :class="notification.readAt == null ? 'bg-primary-main' : 'bg-transparent'"
+              class="mt-1.5 size-2 shrink-0 rounded-full ring-4 ring-transparent"
+              :class="notification.readAt == null ? 'bg-primary-main ring-primary-100/70' : 'bg-grey-500'"
             ></span>
-            <div class="min-w-0 flex-1">
-              <div class="flex items-center justify-between gap-3">
+            <div class="min-w-0">
+              <div class="flex items-start justify-between gap-3">
                 <span
-                  class="truncate text-sm text-title"
-                  :class="notification.readAt == null ? 'font-semibold' : 'font-normal'"
+                  class="min-w-0 flex-1 truncate text-sm leading-5 text-title"
+                  :class="notification.readAt == null ? 'font-semibold' : 'font-medium'"
                 >
                   {{ notification.title }}
                 </span>
                 <time class="shrink-0 text-xs text-grey-800">{{ formatTime(notification.createdAt) }}</time>
               </div>
-              <p class="mt-1 truncate text-sm text-grey-900">{{ notification.body }}</p>
+              <p class="mt-1 line-clamp-2 text-sm leading-5 text-grey-900">{{ notification.body }}</p>
               <div
                 v-if="getNotificationImageAttachmentCount(notification) > 0"
-                class="mt-2 inline-flex items-center gap-1 rounded-full bg-grey-200 px-2 py-0.5 text-xs text-grey-900"
+                class="mt-2 flex items-center gap-2 text-xs text-grey-800"
               >
-                <UIIcon type="camera" class="size-3 text-grey-800" />
-                <span>{{ formatImageCount(getNotificationImageAttachmentCount(notification)) }}</span>
+                <span
+                  class="inline-flex items-center gap-1.5 rounded-full border border-black/10 bg-grey-200 px-2 py-1 text-grey-900"
+                >
+                  <UIIcon type="camera" class="size-3 text-grey-800" />
+                  {{ formatImageCount(getNotificationImageAttachmentCount(notification)) }}
+                </span>
+                <span>{{ $t({ en: 'Tap to open the image details', zh: '点击查看图片详情' }) }}</span>
               </div>
             </div>
             <UIIcon type="arrowRightSmall" class="mt-1 size-4 shrink-0 text-grey-600" />
@@ -375,27 +384,41 @@ function loadMoreNotifications() {
       </div>
 
       <article class="max-h-[480px] overflow-y-auto px-5 py-5">
-        <div class="mb-4">
-          <p class="text-xs font-medium text-grey-900">
-            {{ $t({ en: 'Reply from XBuilder Support', zh: 'XBuilder 支持团队回复' }) }}
+        <section class="rounded-2xl border border-grey-300 bg-grey-100 px-4 py-4 shadow-sm">
+          <div class="flex items-start justify-between gap-3">
+            <div class="min-w-0">
+              <p class="text-xs font-medium uppercase tracking-wide text-grey-800">
+                {{ $t({ en: 'Support reply', zh: '支持回复' }) }}
+              </p>
+              <h3 class="mt-1 text-sm font-semibold leading-5 text-title">
+                {{ $t({ en: 'Reply from XBuilder Support', zh: 'XBuilder 支持团队回复' }) }}
+              </h3>
+            </div>
+            <time class="shrink-0 text-xs text-grey-800">{{ formatTime(selectedNotification.createdAt) }}</time>
+          </div>
+          <p class="mt-3 whitespace-pre-wrap text-sm leading-6 text-grey-1000">{{ selectedNotification.body }}</p>
+        </section>
+
+        <section class="mt-4 rounded-2xl border border-grey-300 bg-white px-4 py-4">
+          <p class="text-xs font-medium uppercase tracking-wide text-grey-800">
+            {{ $t({ en: 'Original feedback', zh: '原始反馈' }) }}
           </p>
-          <time class="mt-1 block text-xs text-grey-800">{{ formatTime(selectedNotification.createdAt) }}</time>
-        </div>
-
-        <p class="whitespace-pre-wrap text-base leading-7 text-grey-1000">{{ selectedNotification.body }}</p>
-
-        <section class="mt-5 rounded-lg border border-grey-300 bg-grey-100 px-3 py-2.5">
-          <p class="text-xs font-medium text-grey-800">{{ $t({ en: 'Related feedback', zh: '关联反馈' }) }}</p>
-          <p class="mt-1 text-sm text-title">
+          <p class="mt-2 text-sm font-medium leading-5 text-title">
             {{
               selectedNotificationFeedback?.title ??
               $t({ en: 'The original feedback is not available.', zh: '原始反馈暂不可用。' })
             }}
           </p>
+          <p
+            v-if="selectedNotificationFeedback?.description != null"
+            class="mt-1 whitespace-pre-wrap text-sm leading-6 text-grey-900"
+          >
+            {{ selectedNotificationFeedback.description }}
+          </p>
         </section>
 
         <template v-if="selectedNotificationImageAttachments.length > 0">
-          <div class="mt-6 flex items-center justify-between gap-3">
+          <div class="mt-5 flex items-center justify-between gap-3">
             <h3 class="text-sm font-semibold text-title">
               {{ $t({ en: 'Images you submitted', zh: '你提交的图片' }) }}
             </h3>
@@ -403,30 +426,32 @@ function loadMoreNotifications() {
               formatImageCount(selectedNotificationImageAttachments.length)
             }}</span>
           </div>
-          <div class="mt-2 grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <div class="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
             <button
               v-for="attachment in selectedNotificationImageAttachments"
               :key="attachment.id"
               type="button"
-              class="group block w-full cursor-zoom-in overflow-hidden rounded-lg border border-grey-400 bg-grey-100 text-left transition-colors hover:border-primary-main hover:bg-primary-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-main"
+              class="group block w-full cursor-zoom-in overflow-hidden rounded-2xl border border-black/10 bg-grey-100 text-left shadow-sm transition-colors hover:border-primary-main hover:bg-primary-100/60 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-main"
               :aria-label="getAttachmentPreviewAriaLabel(attachment)"
               @click="openAttachmentPreview(attachment)"
             >
-              <div class="relative flex aspect-[16/10] items-center justify-center overflow-hidden bg-grey-200 p-2">
+              <div class="relative flex aspect-[16/10] items-center justify-center overflow-hidden bg-grey-200 p-3">
                 <img class="h-full w-full object-contain" :src="attachment.url" :alt="getAttachmentAlt(attachment)" />
                 <span
-                  class="pointer-events-none absolute right-2 top-2 inline-flex items-center gap-1 rounded bg-black/65 px-1.5 py-0.5 text-[11px] font-medium text-white"
+                  class="pointer-events-none absolute left-3 top-3 inline-flex items-center gap-1 rounded-full bg-black/55 px-2 py-1 text-[11px] font-medium text-white"
                 >
                   <UIIcon type="fullScreen" class="size-3 text-white" />
-                  {{ $t({ en: 'Preview', zh: '预览' }) }}
+                  {{ $t({ en: 'Open', zh: '查看' }) }}
                 </span>
               </div>
-              <div class="flex min-h-10 items-center justify-between gap-2 px-2 py-1.5">
+              <div class="flex items-center justify-between gap-3 px-3 py-2.5">
                 <span class="min-w-0">
                   <span class="block truncate text-xs font-medium text-title">{{ attachment.name }}</span>
                   <span class="block text-xs text-grey-800">{{ formatFileSize(attachment.size) }}</span>
                 </span>
-                <UIIcon type="fullScreen" class="size-3.5 shrink-0 text-primary-main" />
+                <span class="rounded-full bg-grey-200 px-2 py-1 text-[11px] font-medium text-grey-900">
+                  {{ $t({ en: 'Tap to enlarge', zh: '点击放大' }) }}
+                </span>
               </div>
             </button>
           </div>

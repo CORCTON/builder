@@ -1,10 +1,12 @@
 import type { FeedbackContext } from './context'
 
+import feedbackDemoImageUrl from '@/components/app/device-check/desktop-required.png'
+
 export type FeedbackSource = 'globalForm'
 export type FeedbackStatus = 'new' | 'handled' | 'replied'
 export type { FeedbackContext } from './context'
 
-export const feedbackDemoMockVersion = 12
+export const feedbackDemoMockVersion = 13
 
 export interface FeedbackAttachment {
   id: string
@@ -75,7 +77,14 @@ const mockData: FeedbackDemoData = {
       status: 'new',
       title: '运行项目时一直卡在加载界面',
       description: '点击运行以后加载动画一直没有结束，刷新页面后还是一样。',
-      attachments: [{ id: 'attachment-1002-1', name: 'loading-screen.png', size: 284_512 }],
+      attachments: [
+        {
+          id: 'attachment-1002-1',
+          name: 'loading-screen.png',
+          size: 284_512,
+          url: feedbackDemoImageUrl
+        }
+      ],
       createdAt: '2026-08-03T09:25:00+08:00',
       handledAt: null,
       reply: null,
@@ -168,9 +177,9 @@ const mockData: FeedbackDemoData = {
     {
       id: 'notification-1009',
       userID: 'user-xiaoyu',
-      feedbackID: 'feedback-1009',
-      title: '项目保存问题已处理',
-      body: '自动保存服务已经恢复，刷新编辑器后即可继续创作。',
+      feedbackID: 'feedback-1002',
+      title: '加载界面问题已定位（含图片）',
+      body: '我们根据你提交的截图定位了问题，请按回复中的建议修改后重试。',
       createdAt: '2026-08-10T10:18:00+08:00',
       readAt: null
     },
@@ -231,7 +240,7 @@ const mockData: FeedbackDemoData = {
     {
       id: 'notification-1002',
       userID: 'user-xiaoyu',
-      feedbackID: 'feedback-demo-1002',
+      feedbackID: 'feedback-1002',
       title: '加载界面问题已定位',
       body: '问题与一条无效指令有关，请按回复中的建议修改后重试。',
       createdAt: '2026-08-03T10:05:00+08:00',

@@ -104,6 +104,9 @@ describe('feedback demo model', () => {
     const model = createFeedbackDemoModel()
     const newFeedback = model.data.feedbacks.find((feedback) => feedback.status === 'new')!
     const initialUnreadCount = model.unreadNotificationCount.value
+    const initialReplyCount = model.data.notifications.filter(
+      (notification) => notification.feedbackID === newFeedback.id
+    ).length
 
     model.replyToFeedback(newFeedback.id, '  We fixed this for you.  ')
 
@@ -118,9 +121,13 @@ describe('feedback demo model', () => {
     })
     expect(model.unreadNotificationCount.value).toBe(initialUnreadCount + 1)
 
+    expect(model.data.notifications.filter((notification) => notification.feedbackID === newFeedback.id)).toHaveLength(
+      initialReplyCount + 1
+    )
+
     model.replyToFeedback(newFeedback.id, 'A second reply')
     expect(model.data.notifications.filter((notification) => notification.feedbackID === newFeedback.id)).toHaveLength(
-      1
+      initialReplyCount + 1
     )
   })
 

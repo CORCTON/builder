@@ -41,6 +41,14 @@ export function createFeedbackDemoModel(initialData = createMockFeedbackDemoData
 
   function closeFeedbackForm() {
     activeFormSource.value = null
+    // Clean up blob URLs from draft attachments
+    for (const attachment of data.drafts.globalForm.attachments) {
+      if (attachment.url?.startsWith('blob:')) {
+        URL.revokeObjectURL(attachment.url)
+      }
+    }
+    // Clear draft attachments and close any other attachment drafts that may be reused later
+    data.drafts.globalForm.attachments = []
   }
 
   function openNotificationCenter() {

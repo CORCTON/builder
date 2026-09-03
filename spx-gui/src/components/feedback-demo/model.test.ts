@@ -153,4 +153,21 @@ describe('feedback demo model', () => {
     expect(model.data.feedbacks[0].status).toBe('new')
     expect(model.unreadNotificationCount.value).toBe(6)
   })
+
+  it('stores image attachments on submitted feedback', () => {
+    const model = createFeedbackDemoModel()
+    const feedback = model.submitFeedback({
+      source: 'globalForm',
+      title: 'Image support',
+      description: 'Screenshot attached',
+      attachments: [{ id: 'attachment-1', name: 'screen.png', size: 1234, url: 'blob:mock' }]
+    })
+
+    expect(feedback.attachments[0]).toMatchObject({
+      id: 'attachment-1',
+      name: 'screen.png',
+      size: 1234,
+      url: 'blob:mock'
+    })
+  })
 })

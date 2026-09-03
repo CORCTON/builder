@@ -326,17 +326,9 @@ function loadMoreNotifications() {
                 <time class="shrink-0 text-xs text-grey-800">{{ formatTime(notification.createdAt) }}</time>
               </div>
               <p class="mt-1 line-clamp-2 text-sm leading-5 text-grey-900">{{ notification.body }}</p>
-              <div
-                v-if="getNotificationImageAttachmentCount(notification) > 0"
-                class="mt-2 flex items-center gap-2 text-xs text-grey-800"
-              >
-                <span
-                  class="inline-flex items-center gap-1.5 rounded-full border border-black/10 bg-grey-200 px-2 py-1 text-grey-900"
-                >
-                  <UIIcon type="camera" class="size-3 text-grey-800" />
-                  {{ formatImageCount(getNotificationImageAttachmentCount(notification)) }}
-                </span>
-                <span>{{ $t({ en: 'Tap to open the image details', zh: '点击查看图片详情' }) }}</span>
+              <div v-if="getNotificationImageAttachmentCount(notification) > 0" class="mt-2 inline-flex items-center gap-1 text-xs text-grey-800">
+                <UIIcon type="camera" class="size-3 text-grey-600" />
+                <span>{{ formatImageCount(getNotificationImageAttachmentCount(notification)) }}</span>
               </div>
             </div>
             <UIIcon type="arrowRightSmall" class="mt-1 size-4 shrink-0 text-grey-600" />
@@ -385,22 +377,17 @@ function loadMoreNotifications() {
 
       <article class="max-h-[480px] overflow-y-auto px-5 py-5">
         <section class="rounded-2xl border border-grey-300 bg-grey-100 px-4 py-4 shadow-sm">
-          <div class="flex items-start justify-between gap-3">
-            <div class="min-w-0">
-              <p class="text-xs font-medium uppercase tracking-wide text-grey-800">
-                {{ $t({ en: 'Support reply', zh: '支持回复' }) }}
-              </p>
-              <h3 class="mt-1 text-sm font-semibold leading-5 text-title">
-                {{ $t({ en: 'Reply from XBuilder Support', zh: 'XBuilder 支持团队回复' }) }}
-              </h3>
-            </div>
+          <div class="flex items-center justify-between gap-3">
+            <p class="text-sm font-medium text-grey-900">
+              {{ $t({ en: 'Reply', zh: '回复' }) }}
+            </p>
             <time class="shrink-0 text-xs text-grey-800">{{ formatTime(selectedNotification.createdAt) }}</time>
           </div>
           <p class="mt-3 whitespace-pre-wrap text-sm leading-6 text-grey-1000">{{ selectedNotification.body }}</p>
         </section>
 
         <section class="mt-4 rounded-2xl border border-grey-300 bg-white px-4 py-4">
-          <p class="text-xs font-medium uppercase tracking-wide text-grey-800">
+          <p class="text-sm font-medium text-grey-900">
             {{ $t({ en: 'Original feedback', zh: '原始反馈' }) }}
           </p>
           <p class="mt-2 text-sm font-medium leading-5 text-title">
@@ -419,12 +406,10 @@ function loadMoreNotifications() {
 
         <template v-if="selectedNotificationImageAttachments.length > 0">
           <div class="mt-5 flex items-center justify-between gap-3">
-            <h3 class="text-sm font-semibold text-title">
-              {{ $t({ en: 'Images you submitted', zh: '你提交的图片' }) }}
+            <h3 class="text-sm font-medium text-grey-900">
+              {{ $t({ en: 'Images', zh: '图片' }) }}
             </h3>
-            <span class="text-xs text-grey-800">{{
-              formatImageCount(selectedNotificationImageAttachments.length)
-            }}</span>
+            <span class="text-xs text-grey-800">{{ formatImageCount(selectedNotificationImageAttachments.length) }}</span>
           </div>
           <div class="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
             <button
@@ -437,21 +422,9 @@ function loadMoreNotifications() {
             >
               <div class="relative flex aspect-[16/10] items-center justify-center overflow-hidden bg-grey-200 p-3">
                 <img class="h-full w-full object-contain" :src="attachment.url" :alt="getAttachmentAlt(attachment)" />
-                <span
-                  class="pointer-events-none absolute left-3 top-3 inline-flex items-center gap-1 rounded-full bg-black/55 px-2 py-1 text-[11px] font-medium text-white"
-                >
-                  <UIIcon type="fullScreen" class="size-3 text-white" />
-                  {{ $t({ en: 'Open', zh: '查看' }) }}
-                </span>
               </div>
-              <div class="flex items-center justify-between gap-3 px-3 py-2.5">
-                <span class="min-w-0">
-                  <span class="block truncate text-xs font-medium text-title">{{ attachment.name }}</span>
-                  <span class="block text-xs text-grey-800">{{ formatFileSize(attachment.size) }}</span>
-                </span>
-                <span class="rounded-full bg-grey-200 px-2 py-1 text-[11px] font-medium text-grey-900">
-                  {{ $t({ en: 'Tap to enlarge', zh: '点击放大' }) }}
-                </span>
+              <div class="px-3 py-2.5">
+                <span class="block truncate text-xs font-medium text-title">{{ attachment.name }}</span>
               </div>
             </button>
           </div>

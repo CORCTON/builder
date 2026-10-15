@@ -3,7 +3,7 @@ import { ref } from 'vue'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { File } from '@/models/common/file'
 import CostumeEditModal from './CostumeEditModal.vue'
-import { createPrototypeCandidate } from './prototype'
+import { createPrototypeCandidate, resizeImage } from './prototype'
 
 const { confirm } = vi.hoisted(() => ({ confirm: vi.fn() }))
 
@@ -20,7 +20,8 @@ vi.mock('@/utils/img-rendering', () => ({
 }))
 vi.mock('./prototype', async (importOriginal) => ({
   ...(await importOriginal<object>()),
-  createPrototypeCandidate: vi.fn()
+  createPrototypeCandidate: vi.fn(),
+  resizeImage: vi.fn()
 }))
 
 function file(name: string) {
@@ -32,7 +33,7 @@ let source: File
 let result: File
 
 function button(text: string) {
-  const match = wrapper.findAll('button').find((node) => node.text() === text)
+  const match = wrapper.findAll('button, [role="button"]').find((node) => node.text() === text)
   if (match == null) throw new Error(`Button not found: ${text}`)
   return match
 }
@@ -71,12 +72,14 @@ afterEach(() => {
 })
 
 describe('CostumeEditModal', () => {
-  it('labels the input and disables empty instructions', () => {
+  it('labels the input, discloses the prototype scope, and disables empty instructions', () => {
     expect(button('Preview edit').attributes('disabled')).toBeDefined()
     const input = wrapper.get('textarea')
     const label = wrapper.get(`[id="${input.attributes('aria-labelledby')}"]`)
     expect(label.text()).toBe('What would you like to change?')
     expect(wrapper.text()).toContain('not AI editing')
+    expect(button('AI edit').exists()).toBe(true)
+    expect(button('Adjust').exists()).toBe(true)
   })
 
   it('rejects unsupported instructions without calling an AI or changing the project', async () => {
@@ -86,11 +89,13 @@ describe('CostumeEditModal', () => {
     expect(wrapper.emitted('resolved')).toBeUndefined()
   })
 
-  it('keeps a preview separate until explicitly applied', async () => {
+  it('keeps a preview separate until kept, then commits on Done', async () => {
     await preview()
     expect(createPrototypeCandidate).toHaveBeenCalledWith(source, 'blue', 0, expect.any(AbortSignal))
     expect(wrapper.emitted('resolved')).toBeUndefined()
-    await button('Apply').trigger('click')
+    await button('Keep this version').trigger('click')
+    expect(wrapper.emitted('resolved')).toBeUndefined()
+    await button('Done').trigger('click')
     expect(wrapper.emitted('resolved')).toEqual([[result]])
   })
 
@@ -103,20 +108,45 @@ describe('CostumeEditModal', () => {
     await flushPromises()
     expect(createPrototypeCandidate).toHaveBeenLastCalledWith(source, 'blue', 1, expect.any(AbortSignal))
     await wrapper.get('button[aria-label="Preview 1"]').trigger('click')
-    await button('Apply').trigger('click')
+    await button('Keep this version').trigger('click')
+    await button('Done').trigger('click')
     expect(wrapper.emitted('resolved')).toEqual([[result]])
   })
 
-  it('continues from the chosen result, not from the initial image', async () => {
+  it('continues the next round from the kept version, not the initial image', async () => {
     await preview()
-    await button('Continue editing').trigger('click')
+    await button('Keep this version').trigger('click')
     expect(wrapper.text()).toContain('Unsaved edits')
     const next = file('second-round.png')
     vi.mocked(createPrototypeCandidate).mockResolvedValue(next)
     await preview('Change to a warm palette')
     expect(createPrototypeCandidate).toHaveBeenLastCalledWith(result, 'warm', 0, expect.any(AbortSignal))
-    await button('Apply').trigger('click')
+    await button('Keep this version').trigger('click')
+    await button('Done').trigger('click')
     expect(wrapper.emitted('resolved')).toEqual([[next]])
+  })
+
+  it('undo restores the draft so Done resolves nothing', async () => {
+    await preview()
+    await button('Keep this version').trigger('click')
+    await button('Undo').trigger('click')
+    await button('Done').trigger('click')
+    expect(wrapper.emitted('resolved')).toBeUndefined()
+    expect(wrapper.emitted('cancelled')).toHaveLength(1)
+  })
+
+  it('applies the Adjust module scale to the same draft', async () => {
+    await button('Adjust').trigger('click')
+    const resized = file('resized.png')
+    vi.mocked(resizeImage).mockResolvedValue(resized)
+    await wrapper.get('input[type="range"]').setValue('150')
+    await flushPromises()
+    await button('Apply scale').trigger('click')
+    await flushPromises()
+    expect(resizeImage).toHaveBeenCalledWith(source, 1.5, expect.any(AbortSignal))
+    expect(wrapper.text()).toContain('Unsaved edits')
+    await button('Done').trigger('click')
+    expect(wrapper.emitted('resolved')).toEqual([[resized]])
   })
 
   it('lets people keep editing or discard without committing a candidate', async () => {
@@ -147,7 +177,7 @@ describe('CostumeEditModal', () => {
     await wrapper.setProps({ visible: false })
     resolve(result)
     await flushPromises()
-    expect(wrapper.findAll('button').some((node) => node.text() === 'Apply')).toBe(false)
+    expect(wrapper.findAll('[role="button"]').some((node) => node.text() === 'Keep this version')).toBe(false)
     expect(wrapper.emitted('resolved')).toBeUndefined()
   })
 
@@ -157,7 +187,8 @@ describe('CostumeEditModal', () => {
     expect(wrapper.get('[role="alert"]').text()).toContain('unchanged')
     expect(wrapper.emitted('resolved')).toBeUndefined()
     await preview()
-    await button('Apply').trigger('click')
+    await button('Keep this version').trigger('click')
+    await button('Done').trigger('click')
     expect(wrapper.emitted('resolved')).toEqual([[result]])
   })
 })

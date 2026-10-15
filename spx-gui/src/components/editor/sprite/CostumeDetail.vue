@@ -1,17 +1,18 @@
 <template>
   <EditorItemDetail :name="costume.name" @rename="emit('rename')">
-    <template v-if="edit != null" #actions>
-      <UIButton
-        v-radar="{ name: 'Edit costume', desc: 'Modify the current costume with an instruction' }"
-        type="secondary"
-        size="small"
-        @click="edit(costume)"
-        >{{ $t({ en: 'Modify...', zh: '修改...' }) }}</UIButton
-      >
-    </template>
     <div class="relative flex-1 overflow-hidden rounded-sm w-full">
       <CheckerboardBackground class="absolute inset-0" />
       <UIImg class="h-full w-full" :src="imgSrc" :loading="imgLoading" />
+      <UIButton
+        v-if="edit != null"
+        v-radar="{ name: 'Edit costume', desc: 'Edit this costume with AI or adjustments' }"
+        class="absolute right-3 bottom-3"
+        type="secondary"
+        size="small"
+        icon="edit"
+        @click="edit(costume)"
+        >{{ $t({ en: 'Edit', zh: '编辑' }) }}</UIButton
+      >
     </div>
   </EditorItemDetail>
 </template>

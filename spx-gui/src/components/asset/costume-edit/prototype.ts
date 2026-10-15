@@ -52,3 +52,27 @@ export async function createPrototypeCandidate(
   signal.throwIfAborted()
   return new File('edited-costume.png', async () => buffer, { type: blob.type, meta: { imgSize: size } })
 }
+
+/** Deterministic whole-image resize for the prototype's Adjust module. */
+export async function resizeImage(source: File, factor: number, signal: AbortSignal): Promise<File> {
+  const size = await getImageSize(source)
+  signal.throwIfAborted()
+  const url = await getRenderableImageUrl(source, signal)
+  const image = new Image()
+  image.src = url
+  await image.decode()
+  signal.throwIfAborted()
+  const width = Math.max(1, Math.round(size.width * factor))
+  const height = Math.max(1, Math.round(size.height * factor))
+  const canvas = new OffscreenCanvas(width, height)
+  const ctx = canvas.getContext('2d')
+  if (ctx == null) throw new Error('Canvas is not available')
+  ctx.drawImage(image, 0, 0, width, height)
+  const blob = await canvas.convertToBlob({ type: 'image/png' })
+  const buffer = await blob.arrayBuffer()
+  signal.throwIfAborted()
+  return new File('resized-costume.png', async () => buffer, {
+    type: blob.type,
+    meta: { imgSize: { width, height } }
+  })
+}

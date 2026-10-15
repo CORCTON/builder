@@ -79,8 +79,8 @@ const [imgSrc, imgLoading] = useRenderableImageUrl(() => props.gen.image)
   <GenPreview v-if="gen.result == null" class="absolute inset-0" :name="gen.name" @rename="handleRenameCostume">
     <template v-if="canSaveCostume" #ops>
       <div class="flex flex-wrap items-center justify-end gap-2">
-        <UIButton type="secondary" :disabled="savingCostume" @click="handleModify()">{{
-          $t({ en: 'Modify...', zh: '修改...' })
+        <UIButton type="secondary" :disabled="savingCostume" icon="edit" @click="handleModify()">{{
+          $t({ en: 'Edit', zh: '编辑' })
         }}</UIButton>
         <UIButton type="green" :loading="savingCostume" @click="handleSaveCostume">{{
           $t({ en: 'Save costume', zh: '保存造型' })

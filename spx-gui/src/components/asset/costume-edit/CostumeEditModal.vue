@@ -12,14 +12,17 @@ import {
   UIFormModal,
   UIImg,
   UILoading,
+  UISlider,
   UITextInput,
   useConfirmDialogWithResult,
   useForm
 } from '@/components/ui'
 import CheckerboardBackground from '@/components/editor/sprite/CheckerboardBackground.vue'
 import CostumeEditVariant from './CostumeEditVariant.vue'
-import { createPrototypeCandidate, resolvePrototypeEffect } from './prototype'
+import { createPrototypeCandidate, resizeImage, resolvePrototypeEffect } from './prototype'
 
+// Editing surface for one costume. Modules (AI edit, adjust, future crop/mask)
+// all transform the same draft; nothing reaches the project until Done.
 const props = defineProps<{ visible: boolean; image: File; name: string }>()
 const emit = defineEmits<{ cancelled: []; resolved: [image: File] }>()
 const { t } = useI18n()
@@ -27,12 +30,15 @@ const confirm = useConfirmDialogWithResult()
 const form = useForm({ instruction: [''] })
 const instruction = toRef(form.value, 'instruction')
 const draft = shallowRef(props.image)
+const draftHistory = shallowRef<File[]>([])
 const candidate = shallowRef<File | null>(null)
 const variants = shallowRef<File[]>([])
 const before = ref(false)
 const busy = ref(false)
 const error = ref('')
 const variation = ref(0)
+const activeModule = ref<'ai' | 'adjust'>('ai')
+const scale = ref(100)
 const input = ref<InstanceType<typeof UITextInput> | null>(null)
 let controller: AbortController | null = null
 let closing = false
@@ -40,6 +46,9 @@ let closing = false
 const changed = computed(() => draft.value !== props.image || candidate.value != null)
 const displayed = computed(() => (before.value ? draft.value : candidate.value ?? draft.value))
 const [src, loading] = useRenderableImageUrl(displayed)
+const previewZoom = computed(() =>
+  activeModule.value === 'adjust' && candidate.value == null && !before.value && !busy.value ? scale.value / 100 : 1
+)
 const examples = [
   { en: 'Change to a blue palette', zh: '换成蓝色系' },
   { en: 'Change to a warm palette', zh: '换成暖色系' },
@@ -50,6 +59,10 @@ function stop() {
   controller?.abort()
   controller = null
   busy.value = false
+}
+
+function pushHistory() {
+  draftHistory.value = [...draftHistory.value, draft.value].slice(-10)
 }
 
 async function generate(retry = false) {
@@ -115,18 +128,70 @@ function discardCandidate() {
   input.value?.focus()
 }
 
-function continueEditing() {
+function keepCandidate() {
   if (candidate.value == null) return
+  pushHistory()
   draft.value = candidate.value
   discardCandidate()
   instruction.value = ''
+  activeModule.value = 'ai'
+}
+
+function selectVariant(image: File) {
+  candidate.value = image
+  before.value = false
+}
+
+function chooseExample(value: string) {
+  instruction.value = value
+  error.value = ''
+  input.value?.focus()
+}
+
+function switchModule(value: unknown) {
+  if (value === 'ai' || value === 'adjust') {
+    activeModule.value = value
+    error.value = ''
+  }
+}
+
+function undoLast() {
+  const previous = draftHistory.value[draftHistory.value.length - 1]
+  if (previous == null || busy.value) return
+  draftHistory.value = draftHistory.value.slice(0, -1)
+  draft.value = previous
+  discardCandidate()
+  scale.value = 100
+}
+
+async function applyScale() {
+  const factor = scale.value / 100
+  if (busy.value || Math.abs(factor - 1) < 0.001) return
+  stop()
+  busy.value = true
+  error.value = ''
+  const request = new AbortController()
+  try {
+    const result = await resizeImage(draft.value, factor, request.signal)
+    pushHistory()
+    draft.value = result
+    scale.value = 100
+  } catch {
+    error.value = t({
+      en: 'The adjustment could not be applied. Your costume is unchanged. Try again.',
+      zh: '调整未能应用，原造型没有改变，请重试。'
+    })
+  } finally {
+    busy.value = false
+  }
 }
 
 function finish() {
+  if (busy.value) return
   const result = candidate.value ?? draft.value
-  if (result === props.image || busy.value) return
   stop()
-  emit('resolved', result)
+  if (result === props.image) emit('cancelled')
+  else emit('resolved', result)
 }
 
 async function close() {
@@ -137,8 +202,8 @@ async function close() {
       const discard = await confirm({
         title: t({ en: 'Discard these edits?', zh: '放弃这些修改？' }),
         content: t({
-          en: 'Your original costume will be kept. Unsaved previews will be discarded.',
-          zh: '原造型会保留，尚未采用的修改将被丢弃。'
+          en: 'Your original costume will be kept. Unsaved changes will be discarded.',
+          zh: '原造型会保留，尚未完成的修改将被丢弃。'
         }),
         confirmText: t({ en: 'Discard edits', zh: '放弃修改' }),
         cancelText: t({ en: 'Keep editing', zh: '继续编辑' })
@@ -172,11 +237,11 @@ onBeforeUnmount(stop)
   <UIFormModal
     style="width: 840px"
     body-class="p-0!"
-    :title="$t({ en: 'Modify costume', zh: '修改造型' })"
+    :title="$t({ en: 'Edit costume', zh: '编辑造型' })"
     :visible="visible"
     :auto-focus="false"
     :mask-closable="false"
-    :radar="{ name: 'Costume edit prototype', desc: 'Preview and confirm an edit to the current costume' }"
+    :radar="{ name: 'Costume edit prototype', desc: 'Edit the current costume with AI or adjustments' }"
     @update:visible="close"
   >
     <div class="flex flex-col">
@@ -204,7 +269,14 @@ onBeforeUnmount(stop)
         :aria-busy="busy"
       >
         <CheckerboardBackground class="absolute inset-0" />
-        <UIImg class="absolute inset-8" :src="src" :loading="loading" role="img" :aria-label="name" />
+        <UIImg
+          class="absolute inset-8"
+          :src="src"
+          :loading="loading"
+          role="img"
+          :aria-label="name"
+          :style="{ transform: `scale(${previewZoom})` }"
+        />
         <div
           v-if="busy"
           class="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-white/80"
@@ -229,43 +301,65 @@ onBeforeUnmount(stop)
           :index="index"
           :selected="candidate === variant"
           :disabled="busy"
-          @click="
-            candidate = variant
-            before = false
-          "
+          @click="selectVariant(variant)"
         />
       </div>
 
-      <div class="px-6 pt-4 pb-5">
-        <p class="mb-4 text-xs leading-relaxed text-grey-700">
+      <div class="px-6 pt-3">
+        <p class="text-xs leading-relaxed text-grey-700">
           {{
             $t({
-              en: 'Interaction prototype · Local whole-image color effects, not AI editing. No credits used.',
-              zh: '交互原型 · 仅演示本地整图配色，非 AI 局部编辑，不消耗额度。'
+              en: 'Interaction prototype · Local image processing only, not AI editing. No credits used.',
+              zh: '交互原型 · 仅演示本地图像处理，未接入 AI 编辑，不消耗额度。'
             })
           }}
         </p>
+      </div>
 
-        <UIForm v-if="candidate == null" :form="form" class="flex flex-col gap-3" @submit="generate()">
-          <UIFormItem :label="$t({ en: 'What would you like to change?', zh: '想怎么修改？' })">
-            <UITextInput
-              ref="input"
-              v-model:value="instruction"
-              type="textarea"
-              :rows="2"
-              :maxlength="500"
-              :disabled="busy"
-              :autofocus="true"
-              :placeholder="
-                $t({
-                  en: 'Describe your change. Keep what you already like.',
-                  zh: '描述想改的地方，保留已经满意的部分。'
-                })
-              "
-              @keydown="onInputKeydown"
-            />
-          </UIFormItem>
-          <div class="flex flex-wrap gap-2">
+      <div v-if="candidate == null" class="flex items-center gap-3 px-6 pt-3">
+        <UIButtonGroup
+          :value="activeModule"
+          type="text"
+          variant="secondary"
+          :aria-label="$t({ en: 'Editing tools', zh: '编辑工具' })"
+          @update:value="switchModule"
+        >
+          <UIButtonGroupItem value="ai">{{ $t({ en: 'AI edit', zh: 'AI 修改' }) }}</UIButtonGroupItem>
+          <UIButtonGroupItem value="adjust">{{ $t({ en: 'Adjust', zh: '调整' }) }}</UIButtonGroupItem>
+        </UIButtonGroup>
+        <UIButton
+          v-radar="{ name: 'Undo costume edit', desc: 'Undo the last edit in this panel' }"
+          type="white"
+          size="small"
+          :disabled="draftHistory.length === 0 || busy"
+          @click="undoLast"
+          >{{ $t({ en: 'Undo', zh: '撤销' }) }}</UIButton
+        >
+      </div>
+
+      <div class="px-6 pt-4 pb-4">
+        <template v-if="candidate == null && activeModule === 'ai'">
+          <UIForm :form="form" class="flex flex-col gap-3" @submit="generate()">
+            <UIFormItem :label="$t({ en: 'What would you like to change?', zh: '想怎么修改？' })">
+              <UITextInput
+                ref="input"
+                v-model:value="instruction"
+                type="textarea"
+                :rows="2"
+                :maxlength="500"
+                :disabled="busy"
+                :autofocus="true"
+                :placeholder="
+                  $t({
+                    en: 'Describe your change. Keep what you already like.',
+                    zh: '描述想改的地方，保留已经满意的部分。'
+                  })
+                "
+                @keydown="onInputKeydown"
+              />
+            </UIFormItem>
+          </UIForm>
+          <div class="mt-3 flex flex-wrap items-center gap-2">
             <UIButton
               v-for="example in examples"
               :key="example.en"
@@ -273,30 +367,82 @@ onBeforeUnmount(stop)
               type="white"
               size="small"
               :disabled="busy"
-              @click="
-                instruction = $t(example)
-                error = ''
-                input?.focus()
-              "
+              @click="chooseExample($t(example))"
               >{{ $t(example) }}</UIButton
             >
+            <UIButton
+              v-radar="{ name: 'Preview costume edit', desc: 'Generate a preview without changing the costume' }"
+              class="ml-auto"
+              type="primary"
+              :disabled="instruction.trim() === ''"
+              :loading="busy"
+              @click="generate()"
+              >{{ $t({ en: 'Preview edit', zh: '生成预览' }) }}</UIButton
+            >
           </div>
-        </UIForm>
-        <div v-else class="flex min-h-20 flex-col justify-center gap-2" role="status" aria-live="polite">
-          <div class="flex items-center justify-between gap-3">
-            <p class="font-medium text-title">{{ instruction }}</p>
-            <UIButton type="white" size="small" :disabled="busy" @click="discardCandidate">{{
-              $t({ en: 'Edit instruction', zh: '更改要求' })
+        </template>
+
+        <div v-else-if="candidate == null" class="flex flex-col gap-4">
+          <div class="flex items-center gap-4">
+            <span class="w-20 shrink-0 text-sm font-medium text-title">{{ $t({ en: 'Scale', zh: '缩放' }) }}</span>
+            <UISlider
+              :value="scale"
+              :min="25"
+              :max="200"
+              :step="1"
+              :disabled="busy"
+              update-on="input"
+              @update:value="scale = $event"
+            />
+            <span class="w-12 shrink-0 text-right text-sm text-title">{{ scale }}%</span>
+          </div>
+          <div class="flex flex-wrap items-center gap-2">
+            <p class="mr-auto text-sm text-grey-700">
+              {{
+                $t({
+                  en: 'Preview scales live. Applied only after you confirm.',
+                  zh: '预览会实时缩放，确认应用后才写入素材。'
+                })
+              }}
+            </p>
+            <UIButton type="white" size="small" :disabled="busy || scale === 100" @click="scale = 100">{{
+              $t({ en: 'Reset', zh: '重置' })
             }}</UIButton>
+            <UIButton
+              v-radar="{ name: 'Apply costume scale', desc: 'Apply the scale to the working draft' }"
+              type="primary"
+              :disabled="busy || scale === 100"
+              @click="applyScale"
+              >{{ $t({ en: 'Apply scale', zh: '应用缩放' }) }}</UIButton
+            >
           </div>
+        </div>
+
+        <div v-else class="flex min-h-20 flex-col justify-center gap-2" role="status" aria-live="polite">
+          <p class="font-medium text-title">{{ instruction }}</p>
           <p class="text-sm text-grey-700">
             {{
               $t({
-                en: 'Compare the result before you apply it. Your costume has not changed yet.',
+                en: 'Compare the result before you keep it. Your costume has not changed yet.',
                 zh: '切换修改前后，确认是否满意。原造型还没有改变。'
               })
             }}
           </p>
+          <div class="mt-2 flex flex-wrap justify-end gap-2">
+            <UIButton type="white" :disabled="busy" @click="discardCandidate">{{
+              $t({ en: 'Discard', zh: '放弃本次' })
+            }}</UIButton>
+            <UIButton type="white" :disabled="busy" @click="generate(true)">{{
+              $t({ en: 'Try again', zh: '再试一次' })
+            }}</UIButton>
+            <UIButton
+              v-radar="{ name: 'Keep costume edit', desc: 'Keep this version and continue editing' }"
+              type="primary"
+              :disabled="busy"
+              @click="keepCandidate"
+              >{{ $t({ en: 'Keep this version', zh: '保留此版' }) }}</UIButton
+            >
+          </div>
         </div>
 
         <p v-if="error !== ''" class="mt-3 text-sm text-red-500" role="alert">{{ error }}</p>
@@ -309,34 +455,13 @@ onBeforeUnmount(stop)
           @click="close"
           >{{ $t({ en: 'Cancel', zh: '取消' }) }}</UIButton
         >
-        <div v-if="candidate != null" class="flex flex-wrap justify-end gap-2">
-          <UIButton type="white" :disabled="busy" @click="generate(true)">{{
-            $t({ en: 'Try again', zh: '再试一次' })
-          }}</UIButton>
-          <UIButton type="secondary" :disabled="busy" @click="continueEditing">{{
-            $t({ en: 'Continue editing', zh: '继续修改' })
-          }}</UIButton>
-          <UIButton
-            v-radar="{ name: 'Apply costume edit', desc: 'Apply the preview and close' }"
-            type="primary"
-            :disabled="busy"
-            @click="finish"
-            >{{ $t({ en: 'Apply', zh: '采用修改' }) }}</UIButton
-          >
-        </div>
-        <div v-else class="flex flex-wrap justify-end gap-2">
-          <UIButton v-if="draft !== image" type="white" :disabled="busy" @click="finish">{{
-            $t({ en: 'Done', zh: '完成' })
-          }}</UIButton>
-          <UIButton
-            v-radar="{ name: 'Preview costume edit', desc: 'Create a candidate without modifying the project' }"
-            type="primary"
-            :disabled="instruction.trim() === '' || busy"
-            :loading="busy"
-            @click="generate()"
-            >{{ $t({ en: 'Preview edit', zh: '生成预览' }) }}</UIButton
-          >
-        </div>
+        <UIButton
+          v-radar="{ name: 'Finish costume edit', desc: 'Apply all edits and close' }"
+          type="primary"
+          :disabled="busy"
+          @click="finish"
+          >{{ $t({ en: 'Done', zh: '完成' }) }}</UIButton
+        >
       </footer>
     </div>
   </UIFormModal>

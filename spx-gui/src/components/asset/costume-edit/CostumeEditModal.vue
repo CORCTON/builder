@@ -5,11 +5,10 @@ import { useRenderableImageUrl } from '@/utils/img-rendering'
 import type { File } from '@/models/common/file'
 import {
   UIButton,
-  UIButtonGroup,
-  UIButtonGroupItem,
   UIForm,
   UIFormItem,
   UIFormModal,
+  UIIcon,
   UIImg,
   UILoading,
   UISlider,
@@ -49,6 +48,10 @@ const [src, loading] = useRenderableImageUrl(displayed)
 const previewZoom = computed(() =>
   activeModule.value === 'adjust' && candidate.value == null && !before.value && !busy.value ? scale.value / 100 : 1
 )
+const modules = [
+  { value: 'ai', icon: 'remix', label: { en: 'AI edit', zh: 'AI 修改' } },
+  { value: 'adjust', icon: 'resize', label: { en: 'Adjust', zh: '调整' } }
+] as const
 const examples = [
   { en: 'Change to a blue palette', zh: '换成蓝色系' },
   { en: 'Change to a warm palette', zh: '换成暖色系' },
@@ -235,51 +238,68 @@ onBeforeUnmount(stop)
 
 <template>
   <UIFormModal
-    style="width: 840px"
+    style="width: 800px"
     body-class="p-0!"
     :title="$t({ en: 'Edit costume', zh: '编辑造型' })"
     :visible="visible"
     :auto-focus="false"
     :mask-closable="false"
-    :radar="{ name: 'Costume edit prototype', desc: 'Edit the current costume with AI or adjustments' }"
+    :radar="{ name: 'Costume edit', desc: 'Edit the current costume with AI or adjustments' }"
     @update:visible="close"
   >
     <div class="flex flex-col">
-      <div class="flex flex-wrap items-center justify-between gap-3 px-6 py-3">
-        <div class="flex min-w-0 items-center gap-2 text-sm">
-          <span class="max-w-48 truncate font-medium text-title" :title="name">{{ name }}</span>
-          <span v-if="draft !== image" class="text-grey-700">{{ $t({ en: 'Unsaved edits', zh: '修改未保存' }) }}</span>
+      <div class="flex items-center justify-between gap-3 px-5 py-3">
+        <div class="flex min-w-0 items-center gap-2.5">
+          <div class="relative h-8 w-8 shrink-0 overflow-hidden rounded-md">
+            <CheckerboardBackground class="absolute inset-0" />
+            <UIImg class="h-full w-full" :src="src" :loading="false" />
+          </div>
+          <span class="max-w-56 truncate text-sm font-medium text-title" :title="name">{{ name }}</span>
+          <span v-if="draft !== image" class="rounded-full bg-primary-100 px-2 py-0.5 text-xs text-primary-400">{{
+            $t({ en: 'Edited', zh: '已修改' })
+          }}</span>
         </div>
-        <UIButtonGroup
-          v-if="candidate != null && !busy"
-          :value="before ? 'before' : 'after'"
-          type="text"
-          variant="secondary"
-          :aria-label="$t({ en: 'Compare edit', zh: '对比修改' })"
-          @update:value="before = $event === 'before'"
-        >
-          <UIButtonGroupItem value="before">{{ $t({ en: 'Before', zh: '修改前' }) }}</UIButtonGroupItem>
-          <UIButtonGroupItem value="after">{{ $t({ en: 'After', zh: '修改后' }) }}</UIButtonGroupItem>
-        </UIButtonGroup>
-        <span v-else class="text-xs text-grey-700">{{ $t({ en: 'Costume', zh: '造型' }) }}</span>
+        <UIButton
+          v-radar="{ name: 'Undo costume edit', desc: 'Undo the last edit in this panel' }"
+          type="white"
+          size="small"
+          icon="undo"
+          :disabled="draftHistory.length === 0 || busy"
+          :aria-label="$t({ en: 'Undo', zh: '撤销' })"
+          :title="$t({ en: 'Undo', zh: '撤销' })"
+          @click="undoLast"
+        />
       </div>
 
       <div
-        class="costume-edit-preview relative mx-6 overflow-hidden rounded-md border border-grey-400"
+        class="costume-edit-preview relative mx-5 overflow-hidden rounded-lg border border-grey-300"
         :aria-busy="busy"
       >
         <CheckerboardBackground class="absolute inset-0" />
         <UIImg
-          class="absolute inset-8"
+          class="absolute inset-8 transition-transform duration-200"
           :src="src"
           :loading="loading"
           role="img"
           :aria-label="name"
-          :style="{ transform: `scale(${previewZoom})` }"
+          :style="{ transform: 'scale(' + previewZoom + ')' }"
         />
+        <UIButton
+          v-if="candidate != null && !busy"
+          class="absolute right-3 top-3 shadow-sm"
+          type="white"
+          size="small"
+          :aria-label="$t({ en: 'Hold to view original', zh: '按住查看原图' })"
+          @pointerdown="before = true"
+          @pointerup="before = false"
+          @pointerleave="before = false"
+          @keydown.space.prevent="before = true"
+          @keyup.space.prevent="before = false"
+          >{{ $t({ en: 'Hold to compare', zh: '按住查看原图' }) }}</UIButton
+        >
         <div
           v-if="busy"
-          class="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-white/80"
+          class="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-white/80 backdrop-blur-[1px]"
           role="status"
           aria-live="polite"
         >
@@ -291,7 +311,7 @@ onBeforeUnmount(stop)
 
       <div
         v-if="variants.length > 1"
-        class="mt-3 flex items-center justify-center gap-2"
+        class="mt-3 flex items-center justify-center gap-2.5"
         :aria-label="$t({ en: 'Candidate previews', zh: '候选预览' })"
       >
         <CostumeEditVariant
@@ -305,150 +325,157 @@ onBeforeUnmount(stop)
         />
       </div>
 
-      <div class="px-6 pt-3">
-        <p class="text-xs leading-relaxed text-grey-700">
-          {{
-            $t({
-              en: 'Interaction prototype · Local image processing only, not AI editing. No credits used.',
-              zh: '交互原型 · 仅演示本地图像处理，未接入 AI 编辑，不消耗额度。'
-            })
-          }}
-        </p>
-      </div>
+      <div class="px-5 pt-4">
+        <div v-if="candidate == null" class="flex justify-center">
+          <div
+            class="inline-flex items-center gap-0.5 rounded-full bg-grey-100 p-1"
+            role="tablist"
+            :aria-label="$t({ en: 'Editing tools', zh: '编辑工具' })"
+          >
+            <button
+              v-for="item in modules"
+              :key="item.value"
+              v-radar="{ name: item.label.en, desc: 'Switch to the ' + item.label.en + ' tool' }"
+              type="button"
+              role="tab"
+              :aria-selected="activeModule === item.value"
+              class="flex items-center gap-1.5 rounded-full px-4 py-1.5 text-sm transition-all duration-150"
+              :class="
+                activeModule === item.value
+                  ? 'bg-white font-medium text-title shadow-sm'
+                  : 'text-grey-700 hover:text-grey-1000'
+              "
+              @click="switchModule(item.value)"
+            >
+              <UIIcon :type="item.icon" class="h-4 w-4" />
+              {{ $t(item.label) }}
+            </button>
+          </div>
+        </div>
 
-      <div v-if="candidate == null" class="flex items-center gap-3 px-6 pt-3">
-        <UIButtonGroup
-          :value="activeModule"
-          type="text"
-          variant="secondary"
-          :aria-label="$t({ en: 'Editing tools', zh: '编辑工具' })"
-          @update:value="switchModule"
-        >
-          <UIButtonGroupItem value="ai">{{ $t({ en: 'AI edit', zh: 'AI 修改' }) }}</UIButtonGroupItem>
-          <UIButtonGroupItem value="adjust">{{ $t({ en: 'Adjust', zh: '调整' }) }}</UIButtonGroupItem>
-        </UIButtonGroup>
-        <UIButton
-          v-radar="{ name: 'Undo costume edit', desc: 'Undo the last edit in this panel' }"
-          type="white"
-          size="small"
-          :disabled="draftHistory.length === 0 || busy"
-          @click="undoLast"
-          >{{ $t({ en: 'Undo', zh: '撤销' }) }}</UIButton
-        >
-      </div>
-
-      <div class="px-6 pt-4 pb-4">
-        <template v-if="candidate == null && activeModule === 'ai'">
-          <UIForm :form="form" class="flex flex-col gap-3" @submit="generate()">
-            <UIFormItem :label="$t({ en: 'What would you like to change?', zh: '想怎么修改？' })">
-              <UITextInput
-                ref="input"
-                v-model:value="instruction"
-                type="textarea"
-                :rows="2"
-                :maxlength="500"
+        <div class="pt-4 pb-1">
+          <template v-if="candidate == null && activeModule === 'ai'">
+            <UIForm :form="form" @submit="generate()">
+              <UIFormItem :label="$t({ en: 'What would you like to change?', zh: '想怎么修改？' })">
+                <UITextInput
+                  ref="input"
+                  v-model:value="instruction"
+                  type="textarea"
+                  :rows="2"
+                  :maxlength="500"
+                  :disabled="busy"
+                  :autofocus="true"
+                  :placeholder="
+                    $t({
+                      en: 'Describe your change. Keep what you already like.',
+                      zh: '描述想改的地方，保留已经满意的部分。'
+                    })
+                  "
+                  @keydown="onInputKeydown"
+                />
+              </UIFormItem>
+            </UIForm>
+            <div class="mt-2.5 flex flex-wrap items-center gap-1.5">
+              <UIButton
+                v-for="example in examples"
+                :key="example.en"
+                v-radar="{ name: example.en, desc: 'Fill in an example modification instruction' }"
+                type="white"
+                size="small"
                 :disabled="busy"
-                :autofocus="true"
-                :placeholder="
-                  $t({
-                    en: 'Describe your change. Keep what you already like.',
-                    zh: '描述想改的地方，保留已经满意的部分。'
-                  })
-                "
-                @keydown="onInputKeydown"
-              />
-            </UIFormItem>
-          </UIForm>
-          <div class="mt-3 flex flex-wrap items-center gap-2">
-            <UIButton
-              v-for="example in examples"
-              :key="example.en"
-              v-radar="{ name: example.en, desc: 'Fill in an example modification instruction' }"
-              type="white"
-              size="small"
-              :disabled="busy"
-              @click="chooseExample($t(example))"
-              >{{ $t(example) }}</UIButton
-            >
-            <UIButton
-              v-radar="{ name: 'Preview costume edit', desc: 'Generate a preview without changing the costume' }"
-              class="ml-auto"
-              type="primary"
-              :disabled="instruction.trim() === ''"
-              :loading="busy"
-              @click="generate()"
-              >{{ $t({ en: 'Preview edit', zh: '生成预览' }) }}</UIButton
-            >
-          </div>
-        </template>
-
-        <div v-else-if="candidate == null" class="flex flex-col gap-4">
-          <div class="flex items-center gap-4">
-            <span class="w-20 shrink-0 text-sm font-medium text-title">{{ $t({ en: 'Scale', zh: '缩放' }) }}</span>
-            <UISlider
-              :value="scale"
-              :min="25"
-              :max="200"
-              :step="1"
-              :disabled="busy"
-              update-on="input"
-              @update:value="scale = $event"
-            />
-            <span class="w-12 shrink-0 text-right text-sm text-title">{{ scale }}%</span>
-          </div>
-          <div class="flex flex-wrap items-center gap-2">
-            <p class="mr-auto text-sm text-grey-700">
+                @click="chooseExample($t(example))"
+                >{{ $t(example) }}</UIButton
+              >
+              <UIButton
+                v-radar="{ name: 'Generate edit preview', desc: 'Generate a preview without changing the costume' }"
+                class="ml-auto"
+                type="primary"
+                icon="arrowUp"
+                :disabled="instruction.trim() === ''"
+                :loading="busy"
+                @click="generate()"
+                >{{ $t({ en: 'Generate', zh: '生成' }) }}</UIButton
+              >
+            </div>
+            <p class="mt-2 text-center text-xs text-grey-600">
               {{
                 $t({
-                  en: 'Preview scales live. Applied only after you confirm.',
-                  zh: '预览会实时缩放，确认应用后才写入素材。'
+                  en: 'Prototype preview · Local image effects, AI not connected, no credits used',
+                  zh: '原型预览 · 本地图像效果，未接入 AI，不消耗额度'
                 })
               }}
             </p>
-            <UIButton type="white" size="small" :disabled="busy || scale === 100" @click="scale = 100">{{
-              $t({ en: 'Reset', zh: '重置' })
-            }}</UIButton>
-            <UIButton
-              v-radar="{ name: 'Apply costume scale', desc: 'Apply the scale to the working draft' }"
-              type="primary"
-              :disabled="busy || scale === 100"
-              @click="applyScale"
-              >{{ $t({ en: 'Apply scale', zh: '应用缩放' }) }}</UIButton
-            >
-          </div>
-        </div>
+          </template>
 
-        <div v-else class="flex min-h-20 flex-col justify-center gap-2" role="status" aria-live="polite">
-          <p class="font-medium text-title">{{ instruction }}</p>
-          <p class="text-sm text-grey-700">
-            {{
-              $t({
-                en: 'Compare the result before you keep it. Your costume has not changed yet.',
-                zh: '切换修改前后，确认是否满意。原造型还没有改变。'
-              })
-            }}
+          <div v-else-if="candidate == null" class="flex flex-col gap-5 py-1">
+            <div class="flex items-center gap-4">
+              <span class="flex w-16 shrink-0 items-center gap-1.5 text-sm font-medium text-title">
+                <UIIcon type="resize" class="h-4 w-4 text-grey-700" />
+                {{ $t({ en: 'Scale', zh: '缩放' }) }}
+              </span>
+              <UISlider
+                :value="scale"
+                :min="25"
+                :max="200"
+                :step="1"
+                :disabled="busy"
+                update-on="input"
+                @update:value="scale = $event"
+              />
+              <span class="w-11 shrink-0 text-right text-sm tabular-nums text-title">{{ scale }}%</span>
+            </div>
+            <div class="flex flex-wrap items-center justify-between gap-2">
+              <button
+                v-radar="{ name: 'Reset scale', desc: 'Reset the scale to 100%' }"
+                type="button"
+                class="text-sm text-primary-400 transition-opacity hover:opacity-80 disabled:opacity-40"
+                :disabled="busy || scale === 100"
+                @click="scale = 100"
+              >
+                {{ $t({ en: 'Reset', zh: '重置' }) }}
+              </button>
+              <UIButton
+                v-radar="{ name: 'Apply costume scale', desc: 'Apply the scale to the working draft' }"
+                type="primary"
+                size="small"
+                :disabled="busy || scale === 100"
+                @click="applyScale"
+                >{{ $t({ en: 'Apply', zh: '应用' }) }}</UIButton
+              >
+            </div>
+          </div>
+
+          <div v-else class="flex flex-col gap-3 py-1" role="status" aria-live="polite">
+            <div class="flex items-center justify-between gap-3">
+              <p class="min-w-0 truncate font-medium text-title">{{ instruction }}</p>
+              <span class="shrink-0 text-xs text-grey-600">{{ $t({ en: 'Not applied yet', zh: '尚未采用' }) }}</span>
+            </div>
+            <div class="flex flex-wrap justify-end gap-2">
+              <UIButton type="white" size="small" :disabled="busy" @click="discardCandidate">{{
+                $t({ en: 'Discard', zh: '放弃' })
+              }}</UIButton>
+              <UIButton type="secondary" size="small" :disabled="busy" @click="generate(true)">{{
+                $t({ en: 'Try again', zh: '再试一次' })
+              }}</UIButton>
+              <UIButton
+                v-radar="{ name: 'Keep costume edit', desc: 'Keep this version and continue editing' }"
+                type="primary"
+                size="small"
+                :disabled="busy"
+                @click="keepCandidate"
+                >{{ $t({ en: 'Keep', zh: '保留' }) }}</UIButton
+              >
+            </div>
+          </div>
+
+          <p v-if="error !== ''" class="mt-2 flex items-center gap-1.5 text-sm text-red-500" role="alert">
+            <UIIcon type="error" class="h-4 w-4 shrink-0" />
+            {{ error }}
           </p>
-          <div class="mt-2 flex flex-wrap justify-end gap-2">
-            <UIButton type="white" :disabled="busy" @click="discardCandidate">{{
-              $t({ en: 'Discard', zh: '放弃本次' })
-            }}</UIButton>
-            <UIButton type="white" :disabled="busy" @click="generate(true)">{{
-              $t({ en: 'Try again', zh: '再试一次' })
-            }}</UIButton>
-            <UIButton
-              v-radar="{ name: 'Keep costume edit', desc: 'Keep this version and continue editing' }"
-              type="primary"
-              :disabled="busy"
-              @click="keepCandidate"
-              >{{ $t({ en: 'Keep this version', zh: '保留此版' }) }}</UIButton
-            >
-          </div>
         </div>
-
-        <p v-if="error !== ''" class="mt-3 text-sm text-red-500" role="alert">{{ error }}</p>
       </div>
 
-      <footer class="flex flex-wrap items-center justify-between gap-3 border-t border-grey-400 px-6 py-4">
+      <footer class="flex items-center justify-between border-t border-grey-300 px-5 py-3.5">
         <UIButton
           v-radar="{ name: 'Cancel costume edit', desc: 'Close without changing the costume' }"
           type="neutral"
@@ -469,6 +496,6 @@ onBeforeUnmount(stop)
 
 <style scoped>
 .costume-edit-preview {
-  height: clamp(200px, 35vh, 360px);
+  height: clamp(220px, 38vh, 380px);
 }
 </style>

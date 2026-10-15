@@ -33,14 +33,16 @@ let source: File
 let result: File
 
 function button(text: string) {
-  const match = wrapper.findAll('button, [role="button"]').find((node) => node.text() === text)
+  const match = wrapper
+    .findAll('button, [role="button"]')
+    .find((node) => node.text() === text || node.attributes('aria-label') === text)
   if (match == null) throw new Error(`Button not found: ${text}`)
   return match
 }
 
 async function preview(instruction = 'Change to a blue palette') {
   await wrapper.get('textarea').setValue(instruction)
-  await button('Preview edit').trigger('click')
+  await button('Generate').trigger('click')
   await vi.advanceTimersByTimeAsync(900)
   await flushPromises()
 }
@@ -73,11 +75,11 @@ afterEach(() => {
 
 describe('CostumeEditModal', () => {
   it('labels the input, discloses the prototype scope, and disables empty instructions', () => {
-    expect(button('Preview edit').attributes('disabled')).toBeDefined()
+    expect(button('Generate').attributes('disabled')).toBeDefined()
     const input = wrapper.get('textarea')
     const label = wrapper.get(`[id="${input.attributes('aria-labelledby')}"]`)
     expect(label.text()).toBe('What would you like to change?')
-    expect(wrapper.text()).toContain('not AI editing')
+    expect(wrapper.text()).toContain('AI not connected')
     expect(button('AI edit').exists()).toBe(true)
     expect(button('Adjust').exists()).toBe(true)
   })
@@ -93,7 +95,7 @@ describe('CostumeEditModal', () => {
     await preview()
     expect(createPrototypeCandidate).toHaveBeenCalledWith(source, 'blue', 0, expect.any(AbortSignal))
     expect(wrapper.emitted('resolved')).toBeUndefined()
-    await button('Keep this version').trigger('click')
+    await button('Keep').trigger('click')
     expect(wrapper.emitted('resolved')).toBeUndefined()
     await button('Done').trigger('click')
     expect(wrapper.emitted('resolved')).toEqual([[result]])
@@ -108,27 +110,27 @@ describe('CostumeEditModal', () => {
     await flushPromises()
     expect(createPrototypeCandidate).toHaveBeenLastCalledWith(source, 'blue', 1, expect.any(AbortSignal))
     await wrapper.get('button[aria-label="Preview 1"]').trigger('click')
-    await button('Keep this version').trigger('click')
+    await button('Keep').trigger('click')
     await button('Done').trigger('click')
     expect(wrapper.emitted('resolved')).toEqual([[result]])
   })
 
   it('continues the next round from the kept version, not the initial image', async () => {
     await preview()
-    await button('Keep this version').trigger('click')
-    expect(wrapper.text()).toContain('Unsaved edits')
+    await button('Keep').trigger('click')
+    expect(wrapper.text()).toContain('Edited')
     const next = file('second-round.png')
     vi.mocked(createPrototypeCandidate).mockResolvedValue(next)
     await preview('Change to a warm palette')
     expect(createPrototypeCandidate).toHaveBeenLastCalledWith(result, 'warm', 0, expect.any(AbortSignal))
-    await button('Keep this version').trigger('click')
+    await button('Keep').trigger('click')
     await button('Done').trigger('click')
     expect(wrapper.emitted('resolved')).toEqual([[next]])
   })
 
   it('undo restores the draft so Done resolves nothing', async () => {
     await preview()
-    await button('Keep this version').trigger('click')
+    await button('Keep').trigger('click')
     await button('Undo').trigger('click')
     await button('Done').trigger('click')
     expect(wrapper.emitted('resolved')).toBeUndefined()
@@ -141,10 +143,10 @@ describe('CostumeEditModal', () => {
     vi.mocked(resizeImage).mockResolvedValue(resized)
     await wrapper.get('input[type="range"]').setValue('150')
     await flushPromises()
-    await button('Apply scale').trigger('click')
+    await button('Apply').trigger('click')
     await flushPromises()
     expect(resizeImage).toHaveBeenCalledWith(source, 1.5, expect.any(AbortSignal))
-    expect(wrapper.text()).toContain('Unsaved edits')
+    expect(wrapper.text()).toContain('Edited')
     await button('Done').trigger('click')
     expect(wrapper.emitted('resolved')).toEqual([[resized]])
   })
@@ -170,14 +172,14 @@ describe('CostumeEditModal', () => {
         })
     )
     await wrapper.get('textarea').setValue('Change to a blue palette')
-    await button('Preview edit').trigger('click')
+    await button('Generate').trigger('click')
     await vi.advanceTimersByTimeAsync(900)
     await button('Cancel').trigger('click')
     await flushPromises()
     await wrapper.setProps({ visible: false })
     resolve(result)
     await flushPromises()
-    expect(wrapper.findAll('[role="button"]').some((node) => node.text() === 'Keep this version')).toBe(false)
+    expect(wrapper.findAll('[role="button"]').some((node) => node.text() === 'Keep')).toBe(false)
     expect(wrapper.emitted('resolved')).toBeUndefined()
   })
 
@@ -187,7 +189,7 @@ describe('CostumeEditModal', () => {
     expect(wrapper.get('[role="alert"]').text()).toContain('unchanged')
     expect(wrapper.emitted('resolved')).toBeUndefined()
     await preview()
-    await button('Keep this version').trigger('click')
+    await button('Keep').trigger('click')
     await button('Done').trigger('click')
     expect(wrapper.emitted('resolved')).toEqual([[result]])
   })

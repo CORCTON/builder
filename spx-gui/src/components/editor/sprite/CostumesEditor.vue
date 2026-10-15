@@ -27,6 +27,7 @@
         v-if="state.selected != null"
         :sprite="sprite"
         :costume="state.selected"
+        :edit="handleEditCostume"
         @rename="handleRename(state.selected)"
       />
     </template>
@@ -69,7 +70,8 @@ export class CostumesEditorState {
 </script>
 
 <script setup lang="ts">
-import { UIMenu, UIMenuItem } from '@/components/ui'
+import { UIMenu, UIMenuItem, useModal } from '@/components/ui'
+import CostumeEditModal from '@/components/asset/costume-edit/CostumeEditModal.vue'
 import { capture, useMessageHandle } from '@/utils/exception'
 import { shiftPath, type PathSegments } from '@/utils/route'
 import type { Sprite } from '@/models/spx/sprite'
@@ -86,6 +88,24 @@ const props = defineProps<{
 }>()
 
 const editorCtx = useEditorCtx()
+
+const editCostume = useModal(CostumeEditModal)
+const handleEditCostume = useMessageHandle(
+  async (costume: Costume) => {
+    const source = costume.img
+    const image = await editCostume({ image: source, name: costume.name })
+    if (costume.img !== source || !props.sprite.costumes.includes(costume)) {
+      throw new Error('The source costume has changed')
+    }
+    await editorCtx.state.history.doAction({ name: { en: 'Modify costume', zh: '修改造型' } }, () =>
+      costume.setImg(image)
+    )
+  },
+  {
+    en: 'Could not apply the edit. Reopen the current costume and try again.',
+    zh: '无法采用修改，请重新打开当前造型后再试。'
+  }
+).fn
 
 function handleSelect(costume: Costume) {
   const action = { name: { en: 'Set default costume', zh: '设置默认造型' } }

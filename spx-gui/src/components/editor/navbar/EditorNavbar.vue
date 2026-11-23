@@ -165,6 +165,7 @@ import { type SpxProject } from '@/models/spx/project'
 import { useSignedInUser } from '@/stores/user'
 import { Visibility } from '@/apis/common'
 import { getProjectPageRoute } from '@/apps/xbuilder/router'
+import { importProjectFile, importProjectFileMessage } from '@/components/editor/project-import'
 import { useModifyProjectName, usePublishProject, useRemoveProject, useUnpublishProject } from '@/components/project'
 import { useLoadFromScratchModal } from '@/components/asset'
 import { useCommunityConfig } from '@/components/community/config'
@@ -211,8 +212,6 @@ const canManageProject = computed(() => {
 
 const selectedEditMode = computed(() => props.state?.selectedEditMode ?? EditMode.Default)
 
-const importProjectFileMessage = { en: 'Import project file', zh: '导入项目文件' }
-
 const handleImportProjectFile = useMessageHandle(
   async () => {
     const { project, state } = props
@@ -227,12 +226,8 @@ const handleImportProjectFile = useMessageHandle(
       confirmText: i18n.t({ en: 'Continue', zh: '继续' })
     })
     const file = await selectFile({ accept: ['xbp', 'gbp' /** For backward compatibility */] })
-    const action = { name: importProjectFileMessage }
     await m.withLoading(
-      state.history.doAction(action, async () => {
-        const serialized = await xbpHelpers.load(file)
-        await project.load(serialized)
-      }),
+      importProjectFile(file, project, state.history),
       i18n.t({ en: 'Importing project file', zh: '导入项目文件中' })
     )
   },
